@@ -1,6 +1,6 @@
 # ADR 0004 — UI en Streamlit con Easy Auth de Container Apps y Google
 
-- **Estado:** Aceptada (UI); auth pendiente de confirmar que la cabecera llega a Streamlit
+- **Estado:** Aceptada
 - **Fecha:** 2026-11-12
 - **Autor:** Marco
 - **Relacionado:** PRD (secciones "Interfaz" y "Autenticación"), ADR 0001, `adapters/inbound/streamlit_app/probe.py`, `infra/modules/containerapps.bicep`
@@ -19,7 +19,7 @@ Para validarlas se desplegó el probe (`probe.py`) en Container Apps (`ca-s2mt-w
 - **Grabación en móvil:** Marco grabó desde el celular con `st.audio_input(sample_rate=16000)` y funcionó bien: WAV de 16 kHz mono que se reproduce en la misma página.
 - **Subida de archivos:** el probe incluye `st.file_uploader` (`.m4a`, `.mp3`, `.wav`, `.ogg`, `.webm` y `.aac`) como camino alterno. Las notas de voz `.m4a` de los spikes se convierten bien con ffmpeg. Falta probar la subida desde el celular.
 - **Easy Auth:** con el cliente OAuth de Google configurado, las peticiones sin sesión reciben 401 o se redirigen al login.
-- **Pendiente de confirmar:** que, tras iniciar sesión, el probe muestre "Sesión iniciada como <correo>". Es decir, que `st.context.headers` reciba `X-MS-CLIENT-PRINCIPAL-NAME` y `X-MS-CLIENT-PRINCIPAL`. Si no llegan, la decisión de auth cambia a `st.login` y este ADR se actualiza.
+- **Identidad en Streamlit (confirmado por Marco el 12-nov-2026):** tras iniciar sesión con Google, el probe muestra "Sesión iniciada como <correo>". Es decir, `st.context.headers` recibe `X-MS-CLIENT-PRINCIPAL-NAME` y `X-MS-CLIENT-PRINCIPAL` también a través del websocket.
 
 ## Decisión
 

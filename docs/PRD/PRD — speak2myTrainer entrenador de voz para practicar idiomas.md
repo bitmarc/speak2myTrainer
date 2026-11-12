@@ -282,7 +282,7 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 - [x] Suscripción, grupo de recursos y presupuesto de 15 USD con alertas
 - [x] Speech F0, Azure OpenAI con `gpt-4o-mini-transcribe` y `gpt-4.1-mini`, Cosmos DB con nivel gratuito, Storage
 - [x] Spike de transcripción verbatim y de pronunciación con 5 audios reales (ADR 0002 y ADR 0003)
-- [ ] Probar `st.audio_input` en iPhone y Android, y la cabecera de Easy Auth en Streamlit (grabación validada; falta confirmar la cabecera, ADR 0004)
+- [x] Probar `st.audio_input` en el celular y la cabecera de Easy Auth en Streamlit (ADR 0004)
 - [x] Repo con estructura hexagonal según el ADR 0001, `pyproject.toml`, linters, pytest e import-linter en CI
 
 ### Fase 1 · MVP de análisis de texto

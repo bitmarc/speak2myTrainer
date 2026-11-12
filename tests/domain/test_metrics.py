@@ -8,7 +8,7 @@ from speak2mytrainer.domain.metrics import (
     fillers_per_minute,
     validate_duration,
 )
-from speak2mytrainer.domain.models import Filler, FillerType
+from speak2mytrainer.domain.models import Filler, FillerType, TimedWord, VerbatimTranscript
 
 
 def test_count_words_includes_fillers_and_contractions() -> None:
@@ -58,3 +58,20 @@ def test_build_metrics_counts_restarts() -> None:
     assert metrics.wpm == 12.0
     assert metrics.fillers_per_min == 4.0
     assert metrics.restarts == 1
+
+
+def test_build_metrics_uses_verbatim_words_and_speaking_time() -> None:
+    # 4 palabras léxicas (con el "um") entre 1.0 s y 3.0 s, en un audio de 12 s.
+    verbatim = VerbatimTranscript(
+        lexical="so um we built",
+        words=[
+            TimedWord(text=w, start_sec=1.0 + i * 0.5, end_sec=1.5 + i * 0.5)
+            for i, w in enumerate(["so", "um", "we", "built"])
+        ],
+    )
+    fillers = [Filler(quote="so um we", token="um", type=FillerType.HESITATION)]
+    metrics = build_metrics("So we built.", 12.0, fillers, verbatim)
+    assert metrics.duration_sec == 12.0
+    assert metrics.words == 4
+    assert metrics.wpm == 120.0
+    assert metrics.fillers_per_min == 30.0

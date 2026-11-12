@@ -31,8 +31,9 @@ Adoptar una **arquitectura hexagonal pragmática**:
 
 | Puerto | Responsabilidad | Adaptador Azure | Adaptador de prueba |
 | --- | --- | --- | --- |
-| `Transcriber` | Audio a texto verbatim (con muletillas) | Azure OpenAI `gpt-4o-mini-transcribe` | Transcripciones fijas |
-| `PronunciationAssessor` | Audio a puntajes y errores por palabra | Azure AI Speech (F0 con failover a S0) | Puntajes fijos |
+| `Transcriber` | Audio al texto de registro, el que ve el usuario (ADR 0002) | Azure OpenAI `gpt-4o-mini-transcribe` | Transcripción fija |
+| `SpeechRecognizer` | Audio a forma léxica con marcas de tiempo; en la Fase 2, también los puntajes de pronunciación en la misma pasada (ADR 0002 y 0003) | Azure AI Speech (F0; failover a S0 en la Fase 2) | Texto léxico fijo |
+| `AudioConverter` | Duración y conversión a WAV 16 kHz mono | ffmpeg / ffprobe | Duración fija |
 | `TextAnalyzer` | Transcripción, contexto e intento previo a análisis estructurado | Azure OpenAI `gpt-4.1-mini` + Structured Outputs | Respuestas grabadas |
 | `SpeechSynthesizer` | Texto a audio | Azure AI Speech TTS | Audio vacío |
 | `AudioStorage` | Guardar, leer y firmar URL | Blob Storage + SAS | Carpeta local |

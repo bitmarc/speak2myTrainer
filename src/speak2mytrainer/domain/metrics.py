@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from speak2mytrainer.domain.errors import AudioDurationError
-from speak2mytrainer.domain.models import Filler, FillerType, Metrics
+from speak2mytrainer.domain.models import Filler, FillerType, Metrics, VerbatimTranscript
 
 MIN_DURATION_SEC = 10.0
 MAX_DURATION_SEC = 600.0
@@ -50,12 +50,20 @@ def count_restarts(fillers: list[Filler]) -> int:
     return sum(1 for f in fillers if f.type is FillerType.RESTART)
 
 
-def build_metrics(transcript: str, duration_sec: float, fillers: list[Filler]) -> Metrics:
-    words = count_words(transcript)
+def build_metrics(
+    transcript: str,
+    duration_sec: float,
+    fillers: list[Filler],
+    verbatim: VerbatimTranscript | None = None,
+) -> Metrics:
+    """Con la transcripción verbatim, las palabras salen de la forma léxica (incluye muletillas) y
+    el ritmo se mide sobre el tiempo de habla, sin silencios al inicio ni al final."""
+    words = count_words(verbatim.lexical if verbatim else transcript)
+    speaking = (verbatim.speaking_span_sec() if verbatim else None) or duration_sec
     return Metrics(
         duration_sec=round(duration_sec, 1),
         words=words,
-        wpm=compute_wpm(words, duration_sec),
-        fillers_per_min=fillers_per_minute(fillers, duration_sec),
+        wpm=compute_wpm(words, speaking),
+        fillers_per_min=fillers_per_minute(fillers, speaking),
         restarts=count_restarts(fillers),
     )

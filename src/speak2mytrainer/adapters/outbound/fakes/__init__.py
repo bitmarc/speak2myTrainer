@@ -6,13 +6,20 @@ from collections import deque
 from datetime import timedelta
 from pathlib import Path
 
-from speak2mytrainer.application.ports import AnalysisRequest, AttemptJob, Transcript
+from speak2mytrainer.application.ports import (
+    AnalysisRequest,
+    AttemptJob,
+    RecognitionResult,
+    Transcript,
+)
 from speak2mytrainer.domain.models import (
     Attempt,
     Practice,
     PronunciationAssessment,
     TextAnalysis,
+    TimedWord,
     UserProfile,
+    VerbatimTranscript,
 )
 
 
@@ -24,16 +31,45 @@ class FakeTranscriber:
         return Transcript(text=self.text, model="fake-transcriber")
 
 
-class FakePronunciationAssessor:
-    def __init__(self, assessment: PronunciationAssessment | None = None) -> None:
-        self.assessment = assessment or PronunciationAssessment(
-            pron_score=80.0, accuracy=82.0, fluency=78.0, prosody=75.0
+class FakeSpeechRecognizer:
+    """Devuelve un texto léxico fijo con una palabra cada `seconds_per_word` segundos."""
+
+    def __init__(
+        self, lexical: str = "well um i once worked on a project", seconds_per_word: float = 0.4
+    ) -> None:
+        self.lexical = lexical
+        self.seconds_per_word = seconds_per_word
+
+    def recognize(
+        self, wav_path: Path, language: str, assess_pronunciation: bool = False
+    ) -> RecognitionResult:
+        step = self.seconds_per_word
+        words = [
+            TimedWord(text=w, start_sec=i * step, end_sec=(i + 1) * step)
+            for i, w in enumerate(self.lexical.split())
+        ]
+        pronunciation = (
+            PronunciationAssessment(pron_score=80.0, accuracy=82.0, fluency=78.0, prosody=75.0)
+            if assess_pronunciation
+            else None
+        )
+        return RecognitionResult(
+            verbatim=VerbatimTranscript(lexical=self.lexical, words=words),
+            pronunciation=pronunciation,
         )
 
-    def assess(
-        self, wav_path: Path, language: str, reference_text: str | None = None
-    ) -> PronunciationAssessment:
-        return self.assessment
+
+class FakeAudioConverter:
+    """No convierte nada: informa una duración fija y copia los bytes al destino."""
+
+    def __init__(self, duration: float = 30.0) -> None:
+        self.duration = duration
+
+    def duration_sec(self, data: bytes, suffix: str) -> float:
+        return self.duration
+
+    def to_wav16k(self, data: bytes, suffix: str, dst: Path) -> None:
+        dst.write_bytes(data)
 
 
 class FakeTextAnalyzer:
@@ -46,7 +82,7 @@ class FakeTextAnalyzer:
 
     def analyze(self, request: AnalysisRequest) -> TextAnalysis:
         self.requests.append(request)
-        return self.analysis
+        return self.analysis.model_copy(deep=True)
 
 
 class FakeSpeechSynthesizer:

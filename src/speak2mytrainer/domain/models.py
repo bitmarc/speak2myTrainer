@@ -99,6 +99,25 @@ class TextAnalysis(BaseModel):
     comparison: Comparison | None = None
 
 
+class TimedWord(BaseModel):
+    text: str
+    start_sec: float
+    end_sec: float
+
+
+class VerbatimTranscript(BaseModel):
+    """Forma léxica de Speech: conserva um/uh, repeticiones y reinicios (ADR 0002)."""
+
+    lexical: str
+    words: list[TimedWord] = Field(default_factory=list)
+
+    def speaking_span_sec(self) -> float | None:
+        """Tiempo entre la primera y la última palabra; None si no hay marcas de tiempo."""
+        if not self.words:
+            return None
+        return max(self.words[-1].end_sec - self.words[0].start_sec, 0.0)
+
+
 class PronunciationAssessment(BaseModel):
     pron_score: float
     accuracy: float
@@ -146,6 +165,7 @@ class Attempt(BaseModel):
     status: AttemptStatus = AttemptStatus.QUEUED
     error: str | None = None
     transcript: str | None = None
+    verbatim_transcript: str | None = None
     metrics: Metrics | None = None
     analysis: TextAnalysis | None = None
     pronunciation: PronunciationAssessment | None = None
@@ -179,6 +199,9 @@ class Quota(BaseModel):
 
     def consume(self, duration_sec: float) -> None:
         self.used_this_month += duration_sec / 60
+
+    def refund(self, duration_sec: float) -> None:
+        self.used_this_month = max(self.used_this_month - duration_sec / 60, 0.0)
 
 
 class Role(StrEnum):

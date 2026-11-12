@@ -17,6 +17,7 @@ from speak2mytrainer.domain.models import (
     PronunciationAssessment,
     TextAnalysis,
     UserProfile,
+    VerbatimTranscript,
 )
 
 
@@ -27,11 +28,22 @@ class Transcript:
 
 
 @dataclass(frozen=True)
+class RecognitionResult:
+    verbatim: VerbatimTranscript
+    pronunciation: PronunciationAssessment | None = None
+
+
+@dataclass(frozen=True)
 class AnalysisRequest:
+    """`transcript` es el texto de registro; `verbatim` y `candidates` son la evidencia de
+    disfluencias de Speech y de la alineación (ADR 0002)."""
+
     transcript: str
     context: str | None
     feedback_language: str
     practice_language: str
+    verbatim: str | None = None
+    candidates: tuple[str, ...] = ()
     previous_transcript: str | None = None
     previous_analysis: TextAnalysis | None = None
 
@@ -44,20 +56,29 @@ class AttemptJob:
 
 
 class Transcriber(Protocol):
-    """Audio (WAV 16 kHz mono) a texto verbatim, conservando muletillas y repeticiones."""
+    """Audio (WAV 16 kHz mono) al texto de registro: legible, el que ve el usuario (ADR 0002)."""
 
     def transcribe(self, wav_path: Path, language: str) -> Transcript: ...
 
 
-class PronunciationAssessor(Protocol):
-    """Audio a puntajes de pronunciación y errores por palabra.
+class SpeechRecognizer(Protocol):
+    """Audio a forma léxica con marcas de tiempo por palabra (ADR 0002).
 
-    Con `reference_text` evalúa en modo guionizado; sin él, en modo no guionizado.
+    Con `assess_pronunciation` la misma pasada devuelve también los puntajes de pronunciación
+    en modo no guionizado (ADR 0003, Fase 2).
     """
 
-    def assess(
-        self, wav_path: Path, language: str, reference_text: str | None = None
-    ) -> PronunciationAssessment: ...
+    def recognize(
+        self, wav_path: Path, language: str, assess_pronunciation: bool = False
+    ) -> RecognitionResult: ...
+
+
+class AudioConverter(Protocol):
+    """Inspección y conversión de audio (ffmpeg). `suffix` es la extensión original, con punto."""
+
+    def duration_sec(self, data: bytes, suffix: str) -> float: ...
+
+    def to_wav16k(self, data: bytes, suffix: str, dst: Path) -> None: ...
 
 
 class TextAnalyzer(Protocol):

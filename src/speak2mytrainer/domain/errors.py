@@ -25,3 +25,19 @@ class AudioDurationError(DomainError):
 
 class QuotaExceededError(DomainError):
     """El usuario agotó sus minutos de audio del mes."""
+
+
+class NotAllowedError(DomainError):
+    """El correo no está en la lista blanca o el usuario no tiene permiso para la acción."""
+
+
+class NotFoundError(DomainError):
+    """La práctica o el intento no existe (o no pertenece al usuario)."""
+
+
+class UnsupportedAudioError(DomainError):
+    """Formato de audio no admitido o archivo que ffmpeg no puede leer."""
+
+
+class ServiceQuotaError(DomainError):
+    """Un servicio externo rechazó la solicitud por cuota, p. ej. las 5 h al mes de Speech F0."""

@@ -10,10 +10,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from speak2mytrainer.adapters.outbound import fakes
 from speak2mytrainer.application.ports import (
+    AudioConverter,
     AudioStorage,
     JobQueue,
     PracticeRepository,
-    PronunciationAssessor,
+    SpeechRecognizer,
     SpeechSynthesizer,
     TextAnalyzer,
     Transcriber,
@@ -38,7 +39,8 @@ class Settings(BaseSettings):
 @dataclass(frozen=True)
 class Container:
     transcriber: Transcriber
-    pronunciation: PronunciationAssessor
+    recognizer: SpeechRecognizer
+    converter: AudioConverter
     analyzer: TextAnalyzer
     synthesizer: SpeechSynthesizer
     audio: AudioStorage
@@ -53,7 +55,8 @@ def build_container(settings: Settings | None = None) -> Container:
         case Environment.LOCAL | Environment.CI:
             return Container(
                 transcriber=fakes.FakeTranscriber(),
-                pronunciation=fakes.FakePronunciationAssessor(),
+                recognizer=fakes.FakeSpeechRecognizer(),
+                converter=fakes.FakeAudioConverter(),
                 analyzer=fakes.FakeTextAnalyzer(),
                 synthesizer=fakes.FakeSpeechSynthesizer(),
                 audio=fakes.LocalFolderAudioStorage(settings.local_data_dir),

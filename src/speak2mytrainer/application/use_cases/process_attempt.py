@@ -60,6 +60,12 @@ class ProcessAttempt:
             raise
         return attempt
 
+    def abandon(self, job: AttemptJob, reason: str) -> None:
+        """Marca el intento `failed` sin procesarlo (p. ej., el job murió en cada intento)."""
+        attempt = self.practices.get_attempt(job.user_id, job.attempt_id)
+        if attempt is not None:
+            self._fail(attempt, DomainError(reason), final=True)
+
     def _save(self, attempt: Attempt, status: AttemptStatus) -> None:
         attempt.advance(status)
         self.practices.update_attempt(attempt)

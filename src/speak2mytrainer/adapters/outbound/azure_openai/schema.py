@@ -26,6 +26,8 @@ from speak2mytrainer.domain.models import (
     ValidNonFiller,
 )
 
+MAX_NEXT_STEPS = 3
+
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -116,7 +118,8 @@ class AnalysisOutput(_Strict):
                 if grounded(g.quote, sources=(record,))
             ],
             improved_version=self.improved_version,
-            next_steps=self.next_steps,
+            # El formato del PRD pide exactamente tres; el modelo a veces da más.
+            next_steps=self.next_steps[:MAX_NEXT_STEPS],
             comparison=comparison,
         )
 

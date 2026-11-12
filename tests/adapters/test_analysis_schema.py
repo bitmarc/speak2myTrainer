@@ -112,3 +112,8 @@ def test_grammar_quote_must_come_from_record_text() -> None:
         grammar=[GrammarOut(quote="we solve it", fix="we solved it", why="...", severity="error")],
     )
     assert output.to_domain(RECORD, VERBATIM).grammar == []
+
+
+def test_next_steps_are_capped_at_three() -> None:
+    output = make_output(next_steps=["1", "2", "3", "4", "5"])
+    assert output.to_domain(TRANSCRIPT).next_steps == ["1", "2", "3"]

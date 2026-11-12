@@ -14,8 +14,7 @@ case "$S2MT_MODE" in
       --browser.gatherUsageStats false
     ;;
   job)
-    echo "El job de análisis llega en la Fase 1." >&2
-    exit 1
+    exec python -m speak2mytrainer.entrypoints.job
     ;;
   *)
     echo "S2MT_MODE desconocido: $S2MT_MODE (usa web o job)" >&2

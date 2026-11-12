@@ -77,6 +77,7 @@ include_external_packages = true
 name = "Capas hexagonales"
 type = "layers"
 layers = [
+  "speak2mytrainer.entrypoints",
   "speak2mytrainer.bootstrap",
   "speak2mytrainer.adapters",
   "speak2mytrainer.application",

@@ -14,7 +14,7 @@ var roleIds = {
   cognitiveServicesSpeechUser: 'f2dc8367-1007-4938-bd23-fe263f013447'
   cognitiveServicesOpenAIUser: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
   storageBlobDataContributor: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-  storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0a8da'
+  storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 }
 
 // Rol integrado de Cosmos DB: "Cosmos DB Built-in Data Contributor".

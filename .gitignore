@@ -19,8 +19,8 @@ build/
 .data/
 spikes/audio/*
 !spikes/audio/.gitkeep
-spikes/results/*.json
-spikes/results/*.wav
+spikes/results/*
+!spikes/results/.gitkeep
 
 # Bicep
 infra/**/*.json
@@ -31,3 +31,4 @@ infra/**/*.json
 .idea/
 Thumbs.db
 .DS_Store
+evals/results/

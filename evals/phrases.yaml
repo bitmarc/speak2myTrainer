@@ -1,0 +1,121 @@
+# Set de evaluación v0: frases ambiguas etiquetadas a mano.
+#
+# fillers        tokens que SÍ son muletillas (uno por ocurrencia), en minúsculas.
+# allow_fillers  tokens que se pueden marcar o no sin penalizar (p. ej., reinicios dudosos).
+# errors         fragmentos que SÍ son error gramatical (severity = error).
+# allow_errors   fragmentos que pueden salir como error sin contar como falso positivo.
+#
+# Métrica (PRD): 0 falsos positivos en muletillas y en Error, recall ≥ 90%.
+# Lo que no está en `errors` puede salir como suggestion o style sin penalizar.
+
+- id: like-verb
+  text: "I like coffee in the morning, and I really like working early."
+  fillers: []
+  errors: []
+
+- id: like-filler
+  text: "The project was, like, huge, and the deadline was really short."
+  fillers: [like]
+  errors: []
+
+- id: like-conjunction
+  text: "Like I said, the API was slow because we didn't cache anything."
+  fillers: []
+  errors: []
+
+- id: like-quotative
+  text: "When the build failed again I was like, why is this happening?"
+  fillers: []
+  errors: []
+
+- id: so-connector
+  text: "So the client needed to manage users and roles in the platform."
+  fillers: []
+  errors: []
+
+- id: so-restart
+  text: "So, so, the idea was to cache the embeddings before the search."
+  fillers: [so]
+  allow_fillers: [so]
+  errors: []
+
+- id: well-opener
+  text: "Well, I once worked on a project for a bank in Mexico."
+  fillers: []
+  errors: []
+
+- id: hesitations
+  text: "Um, I think the main challenge was, uh, the deadline."
+  fillers: [um, uh]
+  errors: []
+
+- id: hmm-thinking
+  text: "Hmm, let me think. The biggest lesson was about testing early."
+  fillers: [hmm]
+  errors: []
+
+- id: restart-we
+  text: "We, um, we migrated the, the whole system to Kubernetes last year."
+  fillers: [um]
+  allow_fillers: [we, the, "we, um, we", "the, the"]
+  errors: []
+
+- id: you-know-literal
+  text: "Do you know the answer? I'm not sure if you know it."
+  fillers: []
+  errors: []
+
+- id: you-know-filler
+  text: "It was, you know, really hard to scale the database."
+  fillers: [you know]
+  errors: []
+
+- id: actually-corrective
+  text: "Actually, the real problem was the cache, not the database."
+  fillers: []
+  errors: []
+
+- id: gonna-wanna
+  text: "We're gonna deploy it next week, but I wanna test it first."
+  fillers: []
+  errors: []
+
+- id: prd-example
+  text: "I once participated on a project where we build a system based on a RAG architecture."
+  fillers: []
+  errors: ["participated on", "we build"]
+
+- id: avoid-to
+  text: "The client wanted to avoid some employees to ask questions about salaries."
+  fillers: []
+  errors: ["avoid some employees to ask"]
+
+- id: since-years
+  text: "I have worked as a backend developer since three years."
+  fillers: []
+  errors: ["since three years"]
+
+- id: explained-me
+  text: "My manager explained me the architecture on my first day."
+  fillers: []
+  errors: ["explained me"]
+
+- id: im-agree
+  text: "I'm agree with that approach, it makes the code easier to test."
+  fillers: []
+  errors: ["i'm agree"]
+
+- id: she-dont
+  text: "She don't have experience with Docker, so I helped her."
+  fillers: []
+  errors: ["she don't"]
+
+- id: doubts-false-friend
+  text: "The employees had many doubts about how to use the new system."
+  fillers: []
+  errors: []
+
+- id: me-and-my-team
+  text: "Me and my team built the pipeline in two weeks. There's a lot of reasons why it worked."
+  fillers: []
+  errors: []

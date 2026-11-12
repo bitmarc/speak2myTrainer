@@ -24,3 +24,21 @@ Todos los servicios tienen la autenticación local (llaves) deshabilitada. El c�
 El script toma tu Object ID con `az ad signed-in-user show` y usa como correo de alertas el de tu sesión de az (`-BudgetEmail` lo cambia).
 
 > Los roles de data plane pueden tardar unos minutos en propagarse después del primer despliegue.
+
+## Web en Container Apps (módulo `containerapps`, opcional)
+
+Se despliega solo si pasas `-WebImage`. Crea el entorno de Consumption, la identidad administrada (compartida con el job de la Fase 1, con los mismos roles de data plane) y la web con mínimo 0 réplicas.
+
+1. El workflow `Imagen` publica `ghcr.io/<owner>/speak2mytrainer:<sha>` en cada push a `main`. La primera vez, haz **pública** la imagen en GitHub → Packages → speak2mytrainer → Package settings → Change visibility.
+2. Primer despliegue, **sin auth**, para conocer el FQDN:
+   ```powershell
+   ./scripts/deploy-infra.ps1 -WebImage ghcr.io/<owner>/speak2mytrainer:latest
+   ```
+   El script imprime el FQDN y el *redirect URI* para Google.
+3. En Google Cloud → APIs & Services → Credentials, crea un **OAuth client ID** de tipo *Web application*:
+   - Authorized JavaScript origins: `https://<fqdn>`
+   - Authorized redirect URIs: `https://<fqdn>/.auth/login/google/callback`
+4. Redespliega con Easy Auth (el script pide el secreto sin mostrarlo):
+   ```powershell
+   ./scripts/deploy-infra.ps1 -WebImage ghcr.io/<owner>/speak2mytrainer:latest -GoogleClientId <id>
+   ```

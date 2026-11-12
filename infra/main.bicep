@@ -30,6 +30,18 @@ param transcribeDeploymentName string = 'gpt-4o-mini-transcribe'
 @description('Nombre del deployment del LLM de análisis.')
 param llmDeploymentName string = 'gpt-4.1-mini'
 
+@description('Desplegar Container Apps (requiere la imagen publicada en GHCR).')
+param deployApps bool = false
+
+@description('Imagen de la web en GHCR.')
+param webImage string = ''
+
+@description('Client ID de Google OAuth para Easy Auth. Vacío = sin auth (solo Fase 0).')
+param googleClientId string = ''
+
+@secure()
+param googleClientSecret string = ''
+
 var tags = {
   project: 'speak2mytrainer'
   managedBy: 'bicep'
@@ -102,6 +114,43 @@ module developerRoles 'modules/roles.bicep' = {
   }
 }
 
+module apps 'modules/containerapps.bicep' = if (deployApps) {
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    prefix: prefix
+    suffix: suffix
+    logAnalyticsWorkspaceName: monitoring.outputs.name
+    webImage: webImage
+    googleClientId: googleClientId
+    googleClientSecret: googleClientSecret
+    appSettings: [
+      { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
+      { name: 'AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT', value: transcribeDeploymentName }
+      { name: 'AZURE_OPENAI_LLM_DEPLOYMENT', value: llmDeploymentName }
+      { name: 'AZURE_SPEECH_RESOURCE_ID', value: speech.outputs.id }
+      { name: 'AZURE_SPEECH_REGION', value: location }
+      { name: 'AZURE_COSMOS_ENDPOINT', value: cosmos.outputs.endpoint }
+      { name: 'AZURE_COSMOS_DATABASE', value: cosmos.outputs.databaseName }
+      { name: 'AZURE_STORAGE_BLOB_ENDPOINT', value: storage.outputs.blobEndpoint }
+      { name: 'AZURE_STORAGE_QUEUE_ENDPOINT', value: storage.outputs.queueEndpoint }
+    ]
+  }
+}
+
+module appRoles 'modules/roles.bicep' = if (deployApps) {
+  scope: rg
+  params: {
+    principalId: deployApps ? apps!.outputs.identityPrincipalId : ''
+    principalType: 'ServicePrincipal'
+    speechAccountName: speech.outputs.name
+    openaiAccountName: openai.outputs.name
+    cosmosAccountName: cosmos.outputs.name
+    storageAccountName: storage.outputs.name
+  }
+}
+
 resource budget 'Microsoft.Consumption/budgets@2023-11-01' = {
   name: 'budget-${prefix}'
   properties: {
@@ -150,3 +199,5 @@ output cosmosDatabase string = cosmos.outputs.databaseName
 output storageAccountName string = storage.outputs.name
 output blobEndpoint string = storage.outputs.blobEndpoint
 output queueEndpoint string = storage.outputs.queueEndpoint
+output webFqdn string = deployApps ? apps!.outputs.webFqdn : ''
+output googleRedirectUri string = deployApps ? apps!.outputs.googleRedirectUri : ''

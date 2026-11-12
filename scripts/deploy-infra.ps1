@@ -5,12 +5,24 @@
 .PARAMETER BudgetEmail
   Correo para las alertas de presupuesto. Por defecto, el usuario de la sesión de az.
 
+.PARAMETER WebImage
+  Imagen de GHCR para la web. Si se indica, también se despliegan Container Apps.
+
+.PARAMETER GoogleClientId
+  Client ID de Google OAuth. Con él (y el secreto) se activa Easy Auth en la web.
+
+.PARAMETER GoogleClientSecret
+  Secreto de Google OAuth. Si no se pasa y hay GoogleClientId, se pide por consola.
+
 .PARAMETER WhatIf
   Solo muestra los cambios (az deployment sub what-if) sin aplicarlos.
 #>
 param(
   [string]$BudgetEmail,
   [string]$Location = 'eastus2',
+  [string]$WebImage,
+  [string]$GoogleClientId,
+  [securestring]$GoogleClientSecret,
   [switch]$WhatIf
 )
 
@@ -20,6 +32,15 @@ $root = Split-Path -Parent $PSScriptRoot
 $env:S2MT_DEVELOPER_PRINCIPAL_ID = az ad signed-in-user show --query id -o tsv
 if (-not $BudgetEmail) { $BudgetEmail = az account show --query user.name -o tsv }
 $env:S2MT_BUDGET_EMAIL = $BudgetEmail
+
+$env:S2MT_DEPLOY_APPS = if ($WebImage) { 'true' } else { 'false' }
+$env:S2MT_WEB_IMAGE = $WebImage
+$env:S2MT_GOOGLE_CLIENT_ID = $GoogleClientId
+$env:S2MT_GOOGLE_CLIENT_SECRET = ''
+if ($GoogleClientId) {
+  if (-not $GoogleClientSecret) { $GoogleClientSecret = Read-Host 'Google client secret' -AsSecureString }
+  $env:S2MT_GOOGLE_CLIENT_SECRET = [System.Net.NetworkCredential]::new('', $GoogleClientSecret).Password
+}
 
 $deploymentName = 'speak2mytrainer'
 $common = @(
@@ -33,8 +54,13 @@ if ($WhatIf) {
   exit $LASTEXITCODE
 }
 
-az deployment sub create @common --output none
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+try {
+  az deployment sub create @common --output none
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+  Remove-Item Env:S2MT_GOOGLE_CLIENT_SECRET -ErrorAction SilentlyContinue
+}
 
 $outputs = az deployment sub show --name $deploymentName --query properties.outputs -o json | ConvertFrom-Json
 
@@ -54,3 +80,7 @@ $lines = @(
 )
 $lines | Set-Content -Path (Join-Path $root '.env') -Encoding utf8
 Write-Host "Listo. Outputs escritos en .env"
+if ($outputs.webFqdn.value) {
+  Write-Host "Web:                https://$($outputs.webFqdn.value)"
+  Write-Host "Redirect URI (Google): $($outputs.googleRedirectUri.value)"
+}

@@ -136,6 +136,8 @@ El panorama de modelos cambió en 2026: en Azure, `whisper@001` se retira el 15 
 | Azure AI Speech STT (texto léxico) | Parcial; validar si conserva *um/uh* | Sí | Incluido en Speech (ver abajo) | Servicio, no modelo |
 | `whisper@001` | Tiende a limpiar muletillas | Con `verbose_json` | \~0.006 USD/min | 15 dic 2026: **descartado** |
 
+**Resultado del spike (12-nov-2026):** ni `gpt-4o-mini-transcribe` ni `gpt-transcribe` conservan las hesitaciones, ni siquiera con prompt verbatim; Speech léxico sí. Se adopta un esquema híbrido: ver ADR 0002.
+
 ### Pronunciación y fluidez acústica
 
 **Azure AI Speech, evaluación de pronunciación no guionizada** (sin texto de referencia): devuelve puntajes de pronunciación, precisión, fluidez y prosodia; por palabra, el tipo de error (pronunciación incorrecta, pausa inesperada, pausa faltante, monotonía). Restricciones verificadas:
@@ -277,11 +279,11 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 
 ### Fase 0 · Spike y fundaciones
 
-- [ ] Suscripción, grupo de recursos y presupuesto de 15 USD con alertas
-- [ ] Speech F0, Azure OpenAI con `gpt-4o-mini-transcribe` y `gpt-4.1-mini`, Cosmos DB con nivel gratuito, Storage
-- [ ] Spike de transcripción verbatim y de pronunciación con 5 audios reales
-- [ ] Probar `st.audio_input` en iPhone y Android, y la cabecera de Easy Auth en Streamlit
-- [ ] Repo con estructura hexagonal según el ADR 0001, `pyproject.toml`, linters, pytest e import-linter en CI
+- [x] Suscripción, grupo de recursos y presupuesto de 15 USD con alertas
+- [x] Speech F0, Azure OpenAI con `gpt-4o-mini-transcribe` y `gpt-4.1-mini`, Cosmos DB con nivel gratuito, Storage
+- [x] Spike de transcripción verbatim y de pronunciación con 5 audios reales (ADR 0002 y ADR 0003)
+- [ ] Probar `st.audio_input` en iPhone y Android, y la cabecera de Easy Auth en Streamlit (grabación validada; falta confirmar la cabecera, ADR 0004)
+- [x] Repo con estructura hexagonal según el ADR 0001, `pyproject.toml`, linters, pytest e import-linter en CI
 
 ### Fase 1 · MVP de análisis de texto
 
@@ -334,10 +336,11 @@ El riesgo más alto es técnico y se resuelve en la Fase 0: que el transcriptor 
 
 Decisiones pendientes:
 
-- [ ] Confirmar Streamlit frente a NiceGUI después del spike de grabación en móvil.
-- [ ] Elegir entre evaluación de pronunciación no guionizada directa, o transcribir primero y evaluar en modo guionizado con ese texto.
+- [x] Confirmar Streamlit frente a NiceGUI después del spike de grabación en móvil: **Streamlit** (ADR 0004).
+- [x] Elegir entre evaluación de pronunciación no guionizada directa, o transcribir primero y evaluar en modo guionizado con ese texto: **no guionizada, filtrada por alineación con la transcripción** (ADR 0003).
+- [x] Motor de transcripción: **híbrido**, `gpt-4o-mini-transcribe` como texto de registro y Speech léxico como evidencia de muletillas (ADR 0002).
 - [ ] Confirmar el precio S0 de Speech para la región elegida.
-- [ ] Definir la región de Azure con todos los servicios disponibles (Speech con evaluación de pronunciación y prosodia, Azure OpenAI con los modelos elegidos).
+- [x] Definir la región de Azure con todos los servicios disponibles (Speech con evaluación de pronunciación y prosodia, Azure OpenAI con los modelos elegidos): **East US 2**.
 - [ ] Nombre público y dominio del proyecto para el portafolio.
 
 ## Siguiente acción recomendada

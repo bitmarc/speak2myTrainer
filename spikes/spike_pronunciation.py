@@ -7,7 +7,7 @@
 Ambas con reconocimiento continuo y prosodia (solo en-US). Mide puntajes, palabras con
 problemas, tiempo de reloj y minutos facturables (cada pasada se cobra como STT).
 
-Uso:  uv run --extra azure python spikes/spike_pronunciation.py spikes/audio/mi_audio.m4a
+Uso:  uv run --all-extras python spikes/spike_pronunciation.py spikes/audio/mi_audio.m4a
       [--reference-engine "gpt-4o-mini-transcribe + verbatim"]
 """
 

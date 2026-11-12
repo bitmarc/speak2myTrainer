@@ -17,7 +17,7 @@ Pon 5 grabaciones reales en `spikes/audio/` (no se versionan). Puedes usar cualq
 ## 2. Transcripción verbatim
 
 ```bash
-uv sync --extra azure
+uv sync --all-extras
 uv run python spikes/spike_transcribe.py
 ```
 

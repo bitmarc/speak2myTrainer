@@ -28,7 +28,7 @@ La regla de dependencias se verifica en CI con `import-linter`.
 ## Desarrollo
 
 ```bash
-uv sync                 # crea .venv con Python 3.12 y dependencias de desarrollo
+uv sync --all-extras    # crea .venv con Python 3.12, deps de desarrollo y extras azure + web
 uv run pytest           # tests (usan fakes, sin Azure)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy

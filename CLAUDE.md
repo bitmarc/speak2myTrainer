@@ -5,7 +5,7 @@ App web (Streamlit + Container Apps Job) para practicar inglés hablado. Fuente 
 ## Comandos
 
 ```bash
-uv sync                                       # Python 3.12, deps de dev
+uv sync --all-extras                          # Python 3.12, deps de dev y extras azure + web
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 uv run mypy

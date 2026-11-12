@@ -3,7 +3,7 @@
 Mide falsos positivos y recall en muletillas y en errores gramaticales (severity = error).
 Meta del PRD: 0 falsos positivos y recall ≥ 90%.
 
-Uso:  uv run --extra azure python evals/run_eval.py [--strict] [--only id]
+Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--only id]
 """
 
 from __future__ import annotations

@@ -14,10 +14,6 @@ def main() -> int:
     logging.basicConfig(
         level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(message)s"
     )
-    # Los SDK de Azure y de OpenAI (httpx) registran cada petición HTTP en INFO.
-    for noisy in ("azure", "httpx"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
-
     settings = Settings()
     if settings.env is not Environment.AZURE:
         logging.error("El job necesita S2MT_ENV=azure (lee la cola real).")
@@ -26,6 +22,10 @@ def main() -> int:
     from azure.identity import DefaultAzureCredential
 
     container = build_container(settings)
+    # Los SDK de Azure y de OpenAI (httpx) registran cada petición HTTP en INFO. Se silencian
+    # después de construir el contenedor porque importar `openai` reconfigura su logger.
+    for noisy in ("azure", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     source = queue_client(AzureSettings().azure_storage_queue_endpoint, DefaultAzureCredential())
     processed = worker_job.run(container, source)
     logging.info("Mensajes procesados: %d", processed)

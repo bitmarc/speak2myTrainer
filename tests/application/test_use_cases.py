@@ -298,3 +298,9 @@ def test_delete_practice_and_history_remove_audio(world: World, tmp_path: Path) 
 def test_signed_url_is_local_file_uri(world: World) -> None:
     world.audio.save("audio/x.wav", b"1", "audio/wav")
     assert world.audio.signed_url("audio/x.wav", timedelta(minutes=5)).startswith("file:")
+
+
+def test_configured_admin_keeps_admin_role() -> None:
+    users = fakes.InMemoryUserDirectory([UserProfile(id=ADMIN, name="Marco", allowed=False)])
+    user = access.resolve_user(users, ADMIN, None, admin_email=ADMIN)
+    assert (user.role, user.allowed) == (Role.ADMIN, True)

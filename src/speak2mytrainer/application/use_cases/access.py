@@ -16,11 +16,14 @@ def normalize_email(email: str) -> str:
 def resolve_user(
     users: UserDirectory, email: str, name: str | None, admin_email: str | None
 ) -> UserProfile:
-    """Usuario de la sesión. El admin configurado se da de alta solo en su primer login."""
+    """Usuario de la sesión. El admin configurado se da de alta en su primer login y siempre
+    conserva el rol y el acceso, aunque su perfil se haya creado antes como usuario normal."""
     email = normalize_email(email)
     user = users.get(email)
-    if user is None and admin_email and email == normalize_email(admin_email):
-        user = UserProfile(id=email, name=name or email, role=Role.ADMIN)
+    is_admin = admin_email is not None and email == normalize_email(admin_email)
+    if is_admin and (user is None or user.role is not Role.ADMIN or not user.allowed):
+        user = user or UserProfile(id=email, name=name or email)
+        user.role, user.allowed = Role.ADMIN, True
         users.save(user)
     if user is None or not user.allowed:
         raise NotAllowedError(f"{email} no está en la lista de usuarios permitidos.")

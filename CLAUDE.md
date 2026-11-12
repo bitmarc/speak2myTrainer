@@ -6,7 +6,10 @@ App web (Streamlit + Container Apps Job) para practicar inglés hablado. Fuente 
 
 ```bash
 uv sync --all-extras                          # Python 3.12, deps de dev y extras azure + web
-uv run pytest
+uv run pytest                                 # unitarios (fakes); -m integration usa Azure real
+uv run streamlit run src/speak2mytrainer/entrypoints/web.py   # web local (fakes; S2MT_ENV=azure + S2MT_DEV_USER para Azure)
+S2MT_ENV=azure uv run python -m speak2mytrainer.entrypoints.job  # procesar la cola real en local
+uv run --all-extras python evals/run_eval.py  # set de evaluación con el LLM real
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
 uv run lint-imports                           # regla de capas hexagonales
@@ -16,6 +19,7 @@ az bicep build --file infra/main.bicep        # validar infra
 
 ## Reglas de arquitectura (ADR 0001)
 
+- Capas: `entrypoints` → `bootstrap` → `adapters` → `application` → `domain`.
 - `domain/` no importa nada del proyecto; `application/` solo importa `domain`; los adaptadores importan hacia dentro; solo `bootstrap.py` conoce los adaptadores concretos.
 - Prohibido importar `azure`, `openai` o `streamlit` desde `domain/` o `application/` (import-linter lo verifica).
 - Los puertos son `typing.Protocol` en `application/ports.py` y cada uno tiene su fake en `adapters/outbound/fakes/`.

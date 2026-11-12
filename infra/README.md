@@ -25,9 +25,15 @@ El script toma tu Object ID con `az ad signed-in-user show` y usa como correo de
 
 > Los roles de data plane pueden tardar unos minutos en propagarse después del primer despliegue.
 
-## Web en Container Apps (módulo `containerapps`, opcional)
+## Web y job en Container Apps (módulo `containerapps`, opcional)
 
-Se despliega solo si pasas `-WebImage`. Crea el entorno de Consumption, la identidad administrada (compartida con el job de la Fase 1, con los mismos roles de data plane) y la web con mínimo 0 réplicas.
+Se despliega solo si pasas `-WebImage`. Crea:
+- el entorno de Consumption;
+- la identidad administrada, compartida por la web y el job, con los mismos roles de data plane;
+- la web, con mínimo 0 réplicas;
+- el **job** `caj-s2mt-worker`: KEDA lo arranca cuando hay mensajes en la cola `attempts` (regla `azure-queue` autenticada con la identidad), con una ejecución a la vez porque Speech F0 admite una sola solicitud concurrente.
+
+Los dos usan la misma imagen; `S2MT_MODE` (`web` o `job`) decide qué arranca.
 
 1. El workflow `Imagen` publica `ghcr.io/<owner>/speak2mytrainer:<sha>` en cada push a `main`. La primera vez, haz **pública** la imagen en GitHub → Packages → speak2mytrainer → Package settings → Change visibility.
 2. Primer despliegue, **sin auth**, para conocer el FQDN:
@@ -38,7 +44,20 @@ Se despliega solo si pasas `-WebImage`. Crea el entorno de Consumption, la ident
 3. En Google Cloud → APIs & Services → Credentials, crea un **OAuth client ID** de tipo *Web application*:
    - Authorized JavaScript origins: `https://<fqdn>`
    - Authorized redirect URIs: `https://<fqdn>/.auth/login/google/callback`
-4. Redespliega con Easy Auth (el script pide el secreto sin mostrarlo):
+4. Redespliega con Easy Auth y el admin inicial (el script pide el secreto sin mostrarlo):
    ```powershell
-   ./scripts/deploy-infra.ps1 -WebImage ghcr.io/<owner>/speak2mytrainer:latest -GoogleClientId <id>
+   ./scripts/deploy-infra.ps1 -WebImage ghcr.io/<owner>/speak2mytrainer:latest -GoogleClientId <id> -AdminEmail <tu correo de Google>
    ```
+   En los siguientes despliegues basta con `-WebImage`: el script reutiliza el client ID, el secreto y el correo del admin que ya tiene la web.
+
+## GitHub Actions sin secretos (OIDC)
+
+`scripts/setup-github-oidc.ps1` se corre una vez, después de desplegar las apps. Crea la app registration `gh-speak2mytrainer` con credenciales federadas para `main` y los pull requests, y le asigna roles mínimos:
+- Container Apps Contributor sobre la web;
+- Container Apps Jobs Contributor sobre el job;
+- Managed Identity Operator sobre la identidad;
+- Cognitive Services OpenAI User.
+
+Además guarda los IDs como variables del repo. Con eso:
+- `deploy.yml` actualiza la web y el job a la imagen de cada push a `main`;
+- `eval.yml` corre el set de evaluación con el LLM real cuando cambian el prompt o los evals.

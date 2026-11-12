@@ -102,7 +102,7 @@ El criterio de calidad número uno es cero falsos positivos: la herramienta pier
 | Aspecto | Objetivo |
 | --- | --- |
 | Duración de audio | 10 s a 10 min |
-| Tiempo de análisis | 30–90 s para un audio de 5 min; arranque en frío aceptable |
+| Tiempo de análisis | \~0.5× la duración del audio más el arranque del job (\~3 min para 5 min de audio). Decidido el 12-nov-2026: Speech F0 procesa a ese ritmo con una sola solicitud a la vez (ADR 0002) |
 | Disponibilidad | Mejor esfuerzo; escalado a cero |
 | Costo | ≤ 15 USD/mes total, con alertas de presupuesto en Azure al 50%, 80% y 100% |
 | Seguridad | HTTPS, login Google, lista blanca, secretos en Key Vault o variables seguras, identidad administrada hacia los servicios de Azure |
@@ -287,14 +287,15 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 
 ### Fase 1 · MVP de análisis de texto
 
-- [ ] Bicep: entorno de Container Apps, web, job con disparador de cola, Storage, Cosmos, identidad administrada
-- [ ] GitHub Actions: tests, build de imagen a GHCR y despliegue
-- [ ] Easy Auth con Google, lista blanca y rol admin
-- [ ] Pantallas: nueva práctica con contexto, grabar o subir, reintentar, estado del procesamiento, resultado, historial
-- [ ] Validación de 10 s a 10 min y conversión con ffmpeg
-- [ ] Job: transcripción, métricas en Python, LLM con esquema JSON (muletillas, usos válidos, gramática, versión mejorada, próximos pasos)
-- [ ] Preferencia de idioma de explicaciones (español por defecto) y cuota mensual por usuario
-- [ ] Set de evaluación inicial de 30 frases
+- [x] Bicep: entorno de Container Apps, web, job con disparador de cola, Storage, Cosmos, identidad administrada
+- [ ] GitHub Actions: tests, build de imagen a GHCR y despliegue (workflows listos; falta correr `scripts/setup-github-oidc.ps1`)
+- [x] Easy Auth con Google, lista blanca y rol admin
+- [x] Pantallas: nueva práctica con contexto, grabar o subir, reintentar, estado del procesamiento, resultado, historial
+- [x] Validación de 10 s a 10 min y conversión con ffmpeg
+- [x] Job: transcripción híbrida (ADR 0002), métricas en Python, LLM con esquema JSON (muletillas, usos válidos, gramática, versión mejorada, próximos pasos)
+- [x] Preferencia de idioma de explicaciones (español por defecto) y cuota mensual por usuario
+- [x] Borrar práctica y todo el historial (adelantado de la Fase 3)
+- [ ] Set de evaluación inicial de 30 frases (32 casos; el set de prueba con fragmentos reales tiene 0 FP pero recall de 56% en muletillas y 50% en errores)
 
 ### Fase 2 · Pronunciación y repetición
 

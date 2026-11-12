@@ -64,7 +64,10 @@ strict = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not integration'"
+markers = [
+  "integration: usa Azure, ffmpeg y audios reales; no corre en CI (uv run pytest -m integration)",
+]
 
 [tool.importlinter]
 root_package = "speak2mytrainer"

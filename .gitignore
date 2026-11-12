@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Datos locales
+.data/
+spikes/audio/*
+!spikes/audio/.gitkeep
+spikes/results/*.json
+spikes/results/*.wav
+
+# Bicep
+infra/**/*.json
+!infra/**/bicepconfig.json
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

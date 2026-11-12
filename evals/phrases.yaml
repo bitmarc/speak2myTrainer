@@ -1,5 +1,9 @@
-# Set de evaluación v0: frases ambiguas etiquetadas a mano.
+# Set de evaluación: frases ambiguas etiquetadas a mano.
 #
+# split          dev (por defecto): sirve para ajustar el prompt. test: fragmentos reales que
+#                nunca se usan para ajustarlo; detectan sobreajuste.
+# text           texto de registro (gpt-4o-mini-transcribe).
+# verbatim       forma léxica de Speech; si falta, se usa `text` (ADR 0002).
 # fillers        tokens que SÍ son muletillas (uno por ocurrencia), en minúsculas.
 # allow_fillers  tokens que se pueden marcar o no sin penalizar (p. ej., reinicios dudosos).
 # errors         fragmentos que SÍ son error gramatical (severity = error).
@@ -119,3 +123,106 @@
   text: "Me and my team built the pipeline in two weeks. There's a lot of reasons why it worked."
   fillers: []
   errors: []
+
+# --- Set de prueba: fragmentos reales (split: test) ---------------------------------------
+# Respuestas reales de Marco a preguntas de entrevista (spikes de la Fase 0), sin nombres ni
+# empresas. `text` es gpt-4o-mini-transcribe y `verbatim` la forma léxica de Speech, tal cual.
+# Etiquetas propuestas por Claude y revisadas por Marco. NO se usan para ajustar el prompt.
+# Las hesitaciones (um, uh, hmm) se esperan con la grafía de Speech: las cuenta Python.
+
+- id: real-sectors
+  split: test
+  context: "Interview question: Tell me about yourself."
+  text: "I have over five years of experience working on software development, and I have experience in different projects from different sectors, such as telecommunications, financial, sales, and educational. I think this has given me a broad perspective of how is build solutions for different business contexts."
+  verbatim: "i have over five years of experience working on software development and um i have experience in different projects from different sectors um such as telecommunications financial sales and educational i think uh this half has given me a broad perspective of how is build solutions for different business contexts"
+  fillers: [um, um, uh]
+  allow_fillers: [half, this, this half]
+  errors: ["how is build"]
+
+- id: real-like-learn
+  split: test
+  context: "Interview question: Tell me about yourself."
+  text: "I consider I am a reliable person. I like learn and teach others. And in the last years, I've been moving into AI-powered software solutions because I think the AI is the future of the development, and I think I could give a really high value on that."
+  verbatim: "umm i consider i am a reliable person i like learn and teach others and in the last years i've been moving into AI powered software solutions because i think the AI is the future of the development and i think i could give a really high value on that"
+  fillers: [umm]
+  errors: ["like learn"]
+  allow_errors: ["i consider i am", "in the last years", "the ai is the future of the development", "give a really high value on that"]
+
+- id: real-mcp-tried
+  split: test
+  context: "Interview question: Have you worked with MCPs (Model Context Protocol)?"
+  text: "In a professional way, I don't work with MCPs, or Model Context Protocol, yet, but I know the control, and I have tried it with a personal project to know how it works"
+  verbatim: "in a professional way i don't work with MCPS or model contacts protocol jet but i know the control and i i have hmm try it with a personal project and to know how it works"
+  fillers: [hmm, i]
+  allow_fillers: [and]
+  errors: []
+  allow_errors: ["in a professional way", "i don't work with mcps", "i know the control", "to know how it works"]
+
+- id: real-mcp-standard
+  split: test
+  context: "Interview question: Have you worked with MCPs (Model Context Protocol)?"
+  text: "I think it's a very relevant standard that solves a real problem that was that each integration of agents with tools was in a custom form, but now this is a standard to make more easy the reuse of different tools with different models and providers."
+  verbatim: "i think it's a very relevant standard that solves a real problem that uh that was that each integration of agents with tools was in a custom form but now this it's an standard to to make more easy the reuse umm different tools with different models and providers"
+  fillers: [uh, umm, that, to]
+  allow_fillers: [this, "it's"]
+  errors: ["make more easy"]
+  allow_errors: ["a real problem that was that", "in a custom form"]
+
+- id: real-feedback-once
+  split: test
+  context: "Interview question: Describe a time you received constructive feedback. What did you do with it?"
+  text: "Once, I once received a constructive feedback after a feature I developed caused a delay during a production window, or production maintenance window."
+  verbatim: "once i once received a constructive feedback after um after a feature i developed caused a delay during a production window or production maintains window"
+  fillers: [once, um, after]
+  allow_fillers: [window, production, production window]
+  errors: ["a constructive feedback"]
+  allow_errors: ["production maintenance window"]
+
+- id: real-feedback-manager
+  split: test
+  context: "Interview question: Describe a time you received constructive feedback. What did you do with it?"
+  text: "So, my manager pointed out that passing test isn't enough. I also need to consider production workloads, scalability, and resource limitations. If I don't know the constraints of the production environment, I should ask before finalizing my implementation. And you know, I appreciate that feedback because it made me realize I had focused too much on making the feature work and not enough on how it would perform under the real conditions."
+  verbatim: "um so my manager pointed out that passing tests isn't enough and i also need to consider production workloads scalability and resource limitations and if i don't know the constraint constraints of the production environment i should ask before finalizing my implementation and and you know i appreciate that feedback because i it made me realize i had focused too much on making the feature work and not enough on how it would perform under the real conditions"
+  fillers: [um, constraint, and, you know, i]
+  allow_fillers: [so]
+  errors: []
+  allow_errors: ["passing test isn't enough", "under the real conditions"]
+
+- id: real-injection-first
+  split: test
+  context: "Interview question: How would you prevent prompt injection?"
+  text: "So the first thing is to, like, make the instructions of the system take it a part of the data or context. The second thing is make a hardening of the system prompt, implement few-shot prompting or examples to show how the prompt injection could be."
+  verbatim: "so the first thing is to and like make the instructions of the system take it apart of the they are our context the second thing is make a hardening of the system prompt implement few shot prompting or or examples to show how how the prompt injection could be"
+  fillers: [like, or, how]
+  allow_fillers: [and]
+  errors: []
+  allow_errors: ["take it a part of the data", "the second thing is make", "make a hardening", "how the prompt injection could be"]
+
+- id: real-injection-third
+  split: test
+  context: "Interview question: How would you prevent prompt injection?"
+  text: "The third thing is validate arguments of tools. And the fourth thing is apply the last privilege to make the agent use the minimum privileges in tools."
+  verbatim: "the third thing is valid validates arguments of tools the fourth thing is supply the last privilege to make the agent use the minimum privileges in tools"
+  fillers: [valid]
+  errors: []
+  allow_errors: ["the third thing is validate", "the fourth thing is apply", "the last privilege", "minimum privileges in tools"]
+
+- id: real-rag-frontend
+  split: test
+  context: "Interview question: Tell me about an important project or challenge that you are proud of."
+  text: "One important thing is that this system needs to have a respect role access control. So the front-end was developed on FastAPI and the back-end was developed on Python with FastAPI. Sorry, front-end with Angular, okay? So what was my role?"
+  verbatim: "one important thing is that this system needs to and kaba respect role access control so the front end was developed on fast API and the back end was developed on on python with fastapi sorry front end with angular OK so what what was my role"
+  fillers: ["on", what]
+  allow_fillers: [and, kaba, sorry, okay]
+  errors: []
+  allow_errors: ["needs to have a respect role access control", "developed on python", "developed on fastapi"]
+
+- id: real-rag-challenge
+  split: test
+  context: "Interview question: Tell me about an important project or challenge that you are proud of."
+  text: "The principal challenge was to make the agent follow the strict rules or flow of the business in the conversation. I think this is one of the most common challenges in AI projects. So we solved it via combining orchestration with prompt engineering."
+  verbatim: "the principal challenge was to to make the agent follow the strict rules or or flow of the business in the conversation and i think this is one of the most common challenges in ai projects so we solved it uh be combining orchestration with prompt engineering"
+  fillers: [to, or, uh]
+  allow_fillers: [and, be]
+  errors: []
+  allow_errors: ["the principal challenge", "via combining", "flow of the business"]

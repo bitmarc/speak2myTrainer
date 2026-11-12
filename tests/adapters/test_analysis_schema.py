@@ -88,3 +88,27 @@ def test_comparison_uses_filtered_filler_counts() -> None:
     assert analysis.comparison is not None
     assert analysis.comparison.fillers_before == 5
     assert analysis.comparison.fillers_after == 1
+
+
+RECORD = "The principal challenge was to make the agent follow the rules. We solved it."
+VERBATIM = "the principal challenge was to to make the agent follow the rules we solve it"
+
+
+def test_restart_quote_can_come_from_verbatim() -> None:
+    output = make_output(
+        fillers=[FillerOut(quote="was to to make", token="to", type="restart")],
+        valid_non_fillers=[],
+        grammar=[],
+    )
+    assert output.to_domain(RECORD).fillers == []
+    assert [f.token for f in output.to_domain(RECORD, VERBATIM).fillers] == ["to"]
+
+
+def test_grammar_quote_must_come_from_record_text() -> None:
+    # "we solve it" solo existe en la forma léxica de Speech: no puede ser un error gramatical.
+    output = make_output(
+        fillers=[],
+        valid_non_fillers=[],
+        grammar=[GrammarOut(quote="we solve it", fix="we solved it", why="...", severity="error")],
+    )
+    assert output.to_domain(RECORD, VERBATIM).grammar == []

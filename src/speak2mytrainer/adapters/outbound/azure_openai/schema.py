@@ -1,8 +1,12 @@
 """Esquema JSON que devuelve el LLM (Structured Outputs) y su traducción al dominio.
 
-El núcleo nunca ve este JSON: `to_domain` lo valida contra la transcripción y devuelve
-objetos de dominio. Cualquier cita que no aparezca literalmente en la transcripción se
-descarta, porque una detección sin evidencia es un falso positivo en potencia.
+El núcleo nunca ve este JSON: `to_domain` lo valida contra las transcripciones y devuelve
+objetos de dominio. Cualquier cita que no aparezca literalmente en su fuente se descarta,
+porque una detección sin evidencia es un falso positivo en potencia (ADR 0002):
+
+- muletillas y usos válidos, contra el texto de registro o la forma léxica de Speech;
+- gramática, solo contra el texto de registro, para que un error de reconocimiento de Speech
+  nunca se convierta en un error gramatical.
 """
 
 from __future__ import annotations
@@ -60,12 +64,20 @@ class AnalysisOutput(_Strict):
     next_steps: list[str]
     comparison: ComparisonOut | None
 
-    def to_domain(self, transcript: str, previous_filler_count: int | None = None) -> TextAnalysis:
-        haystack = _normalize(transcript)
+    def to_domain(
+        self,
+        transcript: str,
+        verbatim: str | None = None,
+        previous_filler_count: int | None = None,
+    ) -> TextAnalysis:
+        record = _normalize(transcript)
+        speech = (record, _normalize(verbatim)) if verbatim else (record,)
 
-        def grounded(quote: str, token: str | None = None) -> bool:
+        def grounded(
+            quote: str, token: str | None = None, sources: tuple[str, ...] = speech
+        ) -> bool:
             q = _normalize(quote)
-            if not q or q not in haystack:
+            if not q.strip() or not any(q in source for source in sources):
                 return False
             return token is None or _normalize(token) in q
 
@@ -101,7 +113,7 @@ class AnalysisOutput(_Strict):
             grammar=[
                 GrammarIssue(quote=g.quote, fix=g.fix, why=g.why, severity=Severity(g.severity))
                 for g in self.grammar
-                if grounded(g.quote)
+                if grounded(g.quote, sources=(record,))
             ],
             improved_version=self.improved_version,
             next_steps=self.next_steps,

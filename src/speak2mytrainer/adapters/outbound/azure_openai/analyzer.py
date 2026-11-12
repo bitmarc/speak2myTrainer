@@ -13,7 +13,7 @@ from speak2mytrainer.adapters.outbound.azure_openai.schema import AnalysisOutput
 from speak2mytrainer.application.ports import AnalysisRequest
 from speak2mytrainer.domain.models import TextAnalysis
 
-PROMPT_VERSION = "v0"
+PROMPT_VERSION = "v1"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 _LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}
@@ -57,6 +57,9 @@ class AzureOpenAITextAnalyzer:
             "context": request.context or "(none)",
             "transcript": request.transcript,
         }
+        if request.verbatim is not None:
+            payload["verbatim"] = request.verbatim
+            payload["disfluency_candidates"] = list(request.candidates)
         previous_fillers: int | None = None
         if request.previous_transcript is not None:
             payload["previous_attempt"] = {
@@ -82,4 +85,4 @@ class AzureOpenAITextAnalyzer:
         message = completion.choices[0].message
         if message.parsed is None:
             raise RuntimeError(f"El modelo no devolvió un análisis válido: {message.refusal}")
-        return message.parsed.to_domain(request.transcript, previous_fillers)
+        return message.parsed.to_domain(request.transcript, request.verbatim, previous_fillers)

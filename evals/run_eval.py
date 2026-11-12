@@ -3,7 +3,14 @@
 Mide falsos positivos y recall en muletillas y en errores gramaticales (severity = error).
 Meta del PRD: 0 falsos positivos y recall ≥ 90%.
 
-Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--only id]
+Cada caso reproduce el pipeline del job (ADR 0002): `text` es el texto de registro y
+`verbatim` (opcional, por defecto el mismo texto) la forma léxica de Speech; los candidatos
+salen de alinear ambos y las hesitaciones las cuenta Python.
+
+Los casos con `split: test` (fragmentos reales) no se usan para ajustar el prompt: se reportan
+aparte para detectar sobreajuste.
+
+Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--only id] [--split dev|test]
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from speak2mytrainer.adapters.outbound.azure_openai.analyzer import (
     AzureOpenAITextAnalyzer,
 )
 from speak2mytrainer.application.ports import AnalysisRequest
+from speak2mytrainer.domain.disfluency import combine_fillers, disfluency_candidates
 from speak2mytrainer.domain.models import Severity, TextAnalysis
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +96,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--strict", action="store_true", help="Exit 1 si no se cumple la meta")
     parser.add_argument("--only", help="Evaluar solo el caso con este id")
+    parser.add_argument("--split", choices=["dev", "test"], help="Evaluar solo ese subconjunto")
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env")
@@ -102,18 +111,25 @@ def main() -> int:
     cases = yaml.safe_load(PHRASES.read_text(encoding="utf-8"))
     if args.only:
         cases = [c for c in cases if c["id"] == args.only]
+    if args.split:
+        cases = [c for c in cases if c.get("split", "dev") == args.split]
 
-    fillers, errors = Score(), Score()
+    scores = {split: (Score(), Score()) for split in ("dev", "test")}
     raw: list[dict[str, Any]] = []
     for case in cases:
+        verbatim = case.get("verbatim", case["text"])
         analysis = analyzer.analyze(
             AnalysisRequest(
                 transcript=case["text"],
                 context=case.get("context"),
                 feedback_language="es",
                 practice_language="en",
+                verbatim=verbatim,
+                candidates=tuple(disfluency_candidates(case["text"], verbatim)),
             )
         )
+        analysis.fillers = combine_fillers(verbatim, analysis.fillers)
+        fillers, errors = scores[case.get("split", "dev")]
         score_fillers(case, analysis, fillers)
         score_errors(case, analysis, errors)
         raw.append({"id": case["id"], "analysis": analysis.model_dump(mode="json")})
@@ -125,13 +141,18 @@ def main() -> int:
     out.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(f"Prompt {PROMPT_VERSION} · modelo {analyzer.model} · {len(cases)} casos")
-    for name, s in (("Muletillas", fillers), ("Errores", errors)):
-        print(f"{name:<11} recall {s.recall:6.1%}  ({s.tp}/{s.tp + s.fn})  FP {len(s.fp)}")
-        for fp in s.fp:
-            print(f"    FP {fp}")
+    evaluated = {c.get("split", "dev") for c in cases}
+    for split in ("dev", "test"):
+        if split not in evaluated:
+            continue
+        print(f"[{split}]")
+        for name, s in zip(("Muletillas", "Errores"), scores[split], strict=True):
+            print(f"  {name:<11} recall {s.recall:6.1%}  ({s.tp}/{s.tp + s.fn})  FP {len(s.fp)}")
+            for fp in s.fp:
+                print(f"      FP {fp}")
     print(f"Detalle: {out}")
 
-    passed = all(not s.fp and s.recall >= 0.9 for s in (fillers, errors))
+    passed = all(not s.fp and s.recall >= 0.9 for pair in scores.values() for s in pair)
     print("META CUMPLIDA" if passed else "META NO CUMPLIDA")
     return 1 if args.strict and not passed else 0
 

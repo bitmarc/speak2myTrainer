@@ -18,13 +18,12 @@ from speak2mytrainer.application.ports import (
     Transcriber,
     UserDirectory,
 )
-from speak2mytrainer.domain.disfluency import disfluency_candidates, hesitations
+from speak2mytrainer.domain.disfluency import combine_fillers, disfluency_candidates
 from speak2mytrainer.domain.errors import DomainError
 from speak2mytrainer.domain.metrics import build_metrics
 from speak2mytrainer.domain.models import (
     Attempt,
     AttemptStatus,
-    FillerType,
     ModelInfo,
     can_transition,
 )
@@ -98,9 +97,7 @@ class ProcessAttempt:
         )
         # Las hesitaciones las cuenta Python sobre la forma léxica; del LLM solo se toman
         # reinicios y muletillas léxicas (ADR 0002).
-        analysis.fillers = hesitations(verbatim.lexical) + [
-            f for f in analysis.fillers if f.type is not FillerType.HESITATION
-        ]
+        analysis.fillers = combine_fillers(verbatim.lexical, analysis.fillers)
         attempt.analysis = analysis
         attempt.metrics = build_metrics(
             transcript.text, attempt.duration_sec, analysis.fillers, verbatim

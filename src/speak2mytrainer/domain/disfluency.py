@@ -43,6 +43,11 @@ def hesitations(lexical: str) -> list[Filler]:
     return found
 
 
+def combine_fillers(lexical: str, llm_fillers: list[Filler]) -> list[Filler]:
+    """Hesitaciones contadas por Python más los reinicios y muletillas léxicas del LLM."""
+    return hesitations(lexical) + [f for f in llm_fillers if f.type is not FillerType.HESITATION]
+
+
 def disfluency_candidates(record_text: str, lexical: str) -> list[str]:
     """Fragmentos que Speech oyó y el texto de registro no tiene, con contexto: "a [b c] d".
 

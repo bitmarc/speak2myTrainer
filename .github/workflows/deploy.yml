@@ -1,0 +1,43 @@
+name: Despliegue
+
+# Cuando la imagen de main se publica, la web y el job pasan a esa imagen (por SHA).
+# La infraestructura (Bicep) se despliega aparte con scripts/deploy-infra.ps1.
+on:
+  workflow_run:
+    workflows: [Imagen]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-speak2mytrainer
+  WEB_APP: ca-s2mt-web
+  JOB: caj-s2mt-worker
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Actualizar web y job
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/speak2mytrainer:${SHA}"
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update -g "$RESOURCE_GROUP" -n "$WEB_APP" --image "$image" -o none
+          az containerapp job update -g "$RESOURCE_GROUP" -n "$JOB" --image "$image" -o none
+          echo "Desplegado $image" >> "$GITHUB_STEP_SUMMARY"

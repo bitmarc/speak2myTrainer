@@ -1,0 +1,44 @@
+name: Evaluación del prompt
+
+# Corre el set de evaluación con el LLM real solo cuando cambia lo que afecta al análisis.
+# Login con OIDC (sin secretos); los PR de forks no reciben token, así que no corren aquí.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/speak2mytrainer/adapters/outbound/azure_openai/**
+      - src/speak2mytrainer/domain/disfluency.py
+      - evals/**
+      - .github/workflows/eval.yml
+  pull_request:
+    paths:
+      - src/speak2mytrainer/adapters/outbound/azure_openai/**
+      - src/speak2mytrainer/domain/disfluency.py
+      - evals/**
+      - .github/workflows/eval.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Instalar dependencias
+        run: uv sync --locked --all-extras --python 3.12
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Set de evaluación (0 FP y recall >= 90%)
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_LLM_DEPLOYMENT: ${{ vars.AZURE_OPENAI_LLM_DEPLOYMENT }}
+        run: uv run python evals/run_eval.py --strict | tee -a "$GITHUB_STEP_SUMMARY"

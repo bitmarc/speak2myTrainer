@@ -42,6 +42,9 @@ param googleClientId string = ''
 @secure()
 param googleClientSecret string = ''
 
+@description('Correo del admin inicial de la app (lista blanca). Llega por variable de entorno.')
+param adminEmail string = ''
+
 var tags = {
   project: 'speak2mytrainer'
   managedBy: 'bicep'
@@ -125,7 +128,10 @@ module apps 'modules/containerapps.bicep' = if (deployApps) {
     webImage: webImage
     googleClientId: googleClientId
     googleClientSecret: googleClientSecret
+    storageAccountName: storage.outputs.name
+    queueName: storage.outputs.queueName
     appSettings: [
+      { name: 'S2MT_ADMIN_EMAIL', value: adminEmail }
       { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
       { name: 'AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT', value: transcribeDeploymentName }
       { name: 'AZURE_OPENAI_LLM_DEPLOYMENT', value: llmDeploymentName }
@@ -201,3 +207,6 @@ output blobEndpoint string = storage.outputs.blobEndpoint
 output queueEndpoint string = storage.outputs.queueEndpoint
 output webFqdn string = deployApps ? apps!.outputs.webFqdn : ''
 output googleRedirectUri string = deployApps ? apps!.outputs.googleRedirectUri : ''
+output webName string = deployApps ? apps!.outputs.webName : ''
+output jobName string = deployApps ? apps!.outputs.jobName : ''
+output identityId string = deployApps ? apps!.outputs.identityId : ''

@@ -9,10 +9,14 @@
   Imagen de GHCR para la web. Si se indica, también se despliegan Container Apps.
 
 .PARAMETER GoogleClientId
-  Client ID de Google OAuth. Con él (y el secreto) se activa Easy Auth en la web.
+  Client ID de Google OAuth. Con él (y el secreto) se activa Easy Auth en la web. Si la web ya
+  existe y no se pasa, se reutilizan el client ID y el secreto que ya tiene configurados.
 
 .PARAMETER GoogleClientSecret
   Secreto de Google OAuth. Si no se pasa y hay GoogleClientId, se pide por consola.
+
+.PARAMETER AdminEmail
+  Correo del admin inicial de la app. Si la web ya existe y no se pasa, se reutiliza el actual.
 
 .PARAMETER WhatIf
   Solo muestra los cambios (az deployment sub what-if) sin aplicarlos.
@@ -23,6 +27,7 @@ param(
   [string]$WebImage,
   [string]$GoogleClientId,
   [securestring]$GoogleClientSecret,
+  [string]$AdminEmail,
   [switch]$WhatIf
 )
 
@@ -32,6 +37,30 @@ $root = Split-Path -Parent $PSScriptRoot
 $env:S2MT_DEVELOPER_PRINCIPAL_ID = az ad signed-in-user show --query id -o tsv
 if (-not $BudgetEmail) { $BudgetEmail = az account show --query user.name -o tsv }
 $env:S2MT_BUDGET_EMAIL = $BudgetEmail
+
+# Al redesplegar las apps, Bicep necesita de nuevo el secreto de Google y el correo del admin;
+# si no se pasan, se toman de la web desplegada para no romper Easy Auth.
+$rg = 'rg-speak2mytrainer'
+$webName = 'ca-s2mt-web'
+if ($WebImage) {
+  $existing = az containerapp show -g $rg -n $webName -o json 2>$null | ConvertFrom-Json
+  if ($existing) {
+    if (-not $GoogleClientId) {
+      $GoogleClientId = az containerapp auth show -g $rg -n $webName `
+        --query identityProviders.google.registration.clientId -o tsv
+      if ($GoogleClientId -and -not $GoogleClientSecret) {
+        $GoogleClientSecret = ConvertTo-SecureString -AsPlainText -Force (
+          az containerapp secret show -g $rg -n $webName --secret-name google-client-secret --query value -o tsv
+        )
+      }
+    }
+    if (-not $AdminEmail) {
+      $AdminEmail = ($existing.properties.template.containers[0].env |
+        Where-Object name -eq 'S2MT_ADMIN_EMAIL').value
+    }
+  }
+}
+$env:S2MT_ADMIN_EMAIL = $AdminEmail
 
 $env:S2MT_DEPLOY_APPS = if ($WebImage) { 'true' } else { 'false' }
 $env:S2MT_WEB_IMAGE = $WebImage

@@ -70,7 +70,7 @@ class AnalysisOutput(_Strict):
         self,
         transcript: str,
         verbatim: str | None = None,
-        previous_filler_count: int | None = None,
+        has_previous: bool = False,
     ) -> TextAnalysis:
         record = _normalize(transcript)
         speech = (record, _normalize(verbatim)) if verbatim else (record,)
@@ -83,14 +83,14 @@ class AnalysisOutput(_Strict):
                 return False
             return token is None or _normalize(token) in q
 
+        # Sin intento previo no hay nada que comparar, aunque el modelo invente algo. Los conteos
+        # de muletillas los completa el caso de uso con las muletillas ya combinadas.
         comparison = None
-        if self.comparison is not None and previous_filler_count is not None:
+        if self.comparison is not None and has_previous:
             comparison = Comparison(
                 fixed=self.comparison.fixed,
                 regressed=self.comparison.regressed,
                 adopted_suggestions=self.comparison.adopted_suggestions,
-                fillers_before=previous_filler_count,
-                fillers_after=0,  # se completa abajo con el conteo ya filtrado
             )
 
         # Si el modelo puso la misma ocurrencia en ambas listas, gana "uso válido": ante la duda,
@@ -102,9 +102,6 @@ class AnalysisOutput(_Strict):
             if grounded(f.quote, f.token)
             and (_normalize(f.quote), _normalize(f.token)) not in valid_keys
         ]
-        if comparison is not None:
-            comparison.fillers_after = len(fillers)
-
         return TextAnalysis(
             fillers=fillers,
             valid_non_fillers=[

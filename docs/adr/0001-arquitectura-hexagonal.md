@@ -32,10 +32,10 @@ Adoptar una **arquitectura hexagonal pragmática**:
 | Puerto | Responsabilidad | Adaptador Azure | Adaptador de prueba |
 | --- | --- | --- | --- |
 | `Transcriber` | Audio al texto de registro, el que ve el usuario (ADR 0002) | Azure OpenAI `gpt-4o-mini-transcribe` | Transcripción fija |
-| `SpeechRecognizer` | Audio a forma léxica con marcas de tiempo; en la Fase 2, también los puntajes de pronunciación en la misma pasada (ADR 0002 y 0003) | Azure AI Speech (F0; failover a S0 en la Fase 2) | Texto léxico fijo |
+| `SpeechRecognizer` | Audio a forma léxica con marcas de tiempo; con `assess_pronunciation`, una pasada aparte con los puntajes de pronunciación (ADR 0002 y 0003) | Azure AI Speech (F0, con failover a S0) | Texto léxico fijo y puntajes fijos |
 | `AudioConverter` | Duración y conversión a WAV 16 kHz mono | ffmpeg / ffprobe | Duración fija |
 | `TextAnalyzer` | Transcripción, contexto e intento previo a análisis estructurado | Azure OpenAI `gpt-4.1-mini` + Structured Outputs | Respuestas grabadas |
-| `SpeechSynthesizer` | Texto a audio | Azure AI Speech TTS | Audio vacío |
+| `SpeechSynthesizer` | Versión mejorada a mp3 con la voz que eligió el usuario | Azure AI Speech TTS (F0, con failover a S0) | Bytes que identifican voz y texto |
 | `AudioStorage` | Guardar, leer y firmar URL | Blob Storage + SAS | Carpeta local |
 | `PracticeRepository` | Prácticas e intentos | Cosmos DB | En memoria |
 | `UserDirectory` | Lista blanca, preferencias, cuotas | Cosmos DB | En memoria |

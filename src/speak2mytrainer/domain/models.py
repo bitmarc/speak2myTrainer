@@ -23,9 +23,9 @@ class AttemptStatus(StrEnum):
     FAILED = "failed"
 
 
-# `assessing` es opcional (la pronunciación llega en la Fase 2), por eso transcribing puede
-# saltar directo a analyzing. Cualquier estado no terminal puede pasar a failed, y failed puede
-# volver a queued para el reintento automático.
+# `assessing` es opcional (solo si el intento pidió evaluar la pronunciación), por eso
+# transcribing puede saltar directo a analyzing. Cualquier estado no terminal puede pasar a
+# failed, y failed puede volver a queued para el reintento automático.
 _TRANSITIONS: dict[AttemptStatus, frozenset[AttemptStatus]] = {
     AttemptStatus.QUEUED: frozenset({AttemptStatus.TRANSCRIBING}),
     AttemptStatus.TRANSCRIBING: frozenset({AttemptStatus.ASSESSING, AttemptStatus.ANALYZING}),
@@ -74,18 +74,25 @@ class GrammarIssue(BaseModel):
 
 
 class PronunciationIssue(BaseModel):
+    """Palabra con pronunciación débil según Speech (ADR 0003)."""
+
     word: str
-    score: float
-    error_type: str
-    heard: str | None = None
+    score: float  # precisión de la palabra, 0-100
+    error_type: str  # Mispronunciation o LowAccuracy
+    weak_phonemes: list[str] = Field(default_factory=list)  # IPA, los de puntaje bajo
+    word_index: int | None = None  # posición en VerbatimTranscript.words, para alinear
 
 
 class Comparison(BaseModel):
+    """Contra el intento anterior de la misma práctica. Las listas las redacta el LLM; los
+    conteos y el número del intento los pone Python."""
+
     fixed: list[str] = Field(default_factory=list)
     regressed: list[str] = Field(default_factory=list)
     adopted_suggestions: list[str] = Field(default_factory=list)
-    fillers_before: int
-    fillers_after: int
+    fillers_before: int = 0
+    fillers_after: int = 0
+    previous_attempt_number: int | None = None
 
 
 class TextAnalysis(BaseModel):
@@ -162,6 +169,8 @@ class Attempt(BaseModel):
     number: int
     audio_blob: str
     duration_sec: float
+    # Pronunciación opcional por intento: es una segunda pasada de Speech (ADR 0003).
+    assess_pronunciation: bool = False
     status: AttemptStatus = AttemptStatus.QUEUED
     error: str | None = None
     transcript: str | None = None
@@ -204,6 +213,13 @@ class Quota(BaseModel):
         self.used_this_month = max(self.used_this_month - duration_sec / 60, 0.0)
 
 
+class VoiceGender(StrEnum):
+    """Voz con la que se escucha la versión mejorada (RF-16)."""
+
+    FEMALE = "female"
+    MALE = "male"
+
+
 class Role(StrEnum):
     ADMIN = "admin"
     USER = "user"
@@ -216,4 +232,5 @@ class UserProfile(BaseModel):
     allowed: bool = True
     feedback_language: str = "es"
     practice_language: str = "en"
+    tts_voice: VoiceGender = VoiceGender.FEMALE
     quota: Quota = Field(default_factory=Quota)

@@ -80,14 +80,14 @@ def test_quote_matching_ignores_case_and_punctuation() -> None:
     assert len(output.to_domain(TRANSCRIPT).fillers) == 1
 
 
-def test_comparison_uses_filtered_filler_counts() -> None:
+def test_comparison_only_with_previous_attempt() -> None:
     output = make_output(
         comparison=ComparisonOut(fixed=["in"], regressed=[], adopted_suggestions=[])
     )
-    analysis = output.to_domain(TRANSCRIPT, previous_filler_count=5)
+    assert output.to_domain(TRANSCRIPT).comparison is None
+    analysis = output.to_domain(TRANSCRIPT, has_previous=True)
     assert analysis.comparison is not None
-    assert analysis.comparison.fillers_before == 5
-    assert analysis.comparison.fillers_after == 1
+    assert analysis.comparison.fixed == ["in"]
 
 
 RECORD = "The principal challenge was to make the agent follow the rules. We solved it."

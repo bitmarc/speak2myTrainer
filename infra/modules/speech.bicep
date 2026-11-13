@@ -1,5 +1,5 @@
-// Azure AI Speech. F0 es el primario (5 h de STT y 0.5 M caracteres de TTS al mes).
-// El recurso S0 de failover se agrega en la Fase 2. Sin llaves: auth con Entra, que exige
+// Azure AI Speech. Se instancia dos veces: F0 como primario (5 h de STT y 0.5 M caracteres de
+// TTS al mes) y S0 como respaldo de pago por uso. Sin llaves: auth con Entra, que exige
 // subdominio propio.
 param name string
 param location string

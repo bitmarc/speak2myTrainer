@@ -18,6 +18,7 @@ from speak2mytrainer.domain.models import (
     TextAnalysis,
     UserProfile,
     VerbatimTranscript,
+    VoiceGender,
 )
 
 
@@ -64,8 +65,9 @@ class Transcriber(Protocol):
 class SpeechRecognizer(Protocol):
     """Audio a forma léxica con marcas de tiempo por palabra (ADR 0002).
 
-    Con `assess_pronunciation` la misma pasada devuelve también los puntajes de pronunciación
-    en modo no guionizado (ADR 0003, Fase 2).
+    Con `assess_pronunciation` devuelve también los puntajes de pronunciación en modo no
+    guionizado (ADR 0003). Esa forma léxica pierde hesitaciones: para las muletillas se usa
+    siempre una pasada sin evaluación.
     """
 
     def recognize(
@@ -94,9 +96,9 @@ class TextAnalyzer(Protocol):
 
 
 class SpeechSynthesizer(Protocol):
-    """Texto a audio (mp3)."""
+    """Texto a audio mp3 con voz neural, en el idioma practicado."""
 
-    def synthesize(self, text: str, language: str) -> bytes: ...
+    def synthesize(self, text: str, language: str, voice: VoiceGender) -> bytes: ...
 
 
 class AudioStorage(Protocol):

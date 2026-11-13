@@ -14,12 +14,19 @@ from speak2mytrainer.application.ports import (
 )
 from speak2mytrainer.domain.models import (
     Attempt,
+    Comparison,
+    Filler,
+    FillerType,
+    GrammarIssue,
     Practice,
     PronunciationAssessment,
+    PronunciationIssue,
+    Severity,
     TextAnalysis,
     TimedWord,
     UserProfile,
     VerbatimTranscript,
+    VoiceGender,
 )
 
 
@@ -35,21 +42,33 @@ class FakeSpeechRecognizer:
     """Devuelve un texto léxico fijo con una palabra cada `seconds_per_word` segundos."""
 
     def __init__(
-        self, lexical: str = "well um i once worked on a project", seconds_per_word: float = 0.4
+        self,
+        lexical: str = "well um i once worked on a project",
+        seconds_per_word: float = 0.4,
+        issues: list[PronunciationIssue] | None = None,
     ) -> None:
         self.lexical = lexical
         self.seconds_per_word = seconds_per_word
+        self.issues = issues or []
+        self.calls: list[bool] = []  # assess_pronunciation de cada llamada
 
     def recognize(
         self, wav_path: Path, language: str, assess_pronunciation: bool = False
     ) -> RecognitionResult:
+        self.calls.append(assess_pronunciation)
         step = self.seconds_per_word
         words = [
             TimedWord(text=w, start_sec=i * step, end_sec=(i + 1) * step)
             for i, w in enumerate(self.lexical.split())
         ]
         pronunciation = (
-            PronunciationAssessment(pron_score=80.0, accuracy=82.0, fluency=78.0, prosody=75.0)
+            PronunciationAssessment(
+                pron_score=80.0,
+                accuracy=82.0,
+                fluency=78.0,
+                prosody=75.0,
+                issues=[i.model_copy() for i in self.issues],
+            )
             if assess_pronunciation
             else None
         )
@@ -72,6 +91,37 @@ class FakeAudioConverter:
         dst.write_bytes(data)
 
 
+def demo_analysis() -> TextAnalysis:
+    """Un análisis con todos los bloques, para ver la interfaz en local sin Azure."""
+    return TextAnalysis(
+        fillers=[Filler(quote="well um I once", token="well", type=FillerType.LEXICAL)],
+        grammar=[
+            GrammarIssue(
+                quote="worked on a project",
+                fix="worked on a big project",
+                why="Ejemplo local: el analizador real explica aquí la corrección.",
+                severity=Severity.SUGGESTION,
+            )
+        ],
+        improved_version="I once worked on a challenging project for a bank.",
+        next_steps=["Haz pausas en silencio.", "Usa el pasado.", "Da un ejemplo concreto."],
+        comparison=Comparison(fixed=["Ejemplo local de algo corregido"]),
+    )
+
+
+def demo_issues() -> list[PronunciationIssue]:
+    """Una palabra a practicar sobre el texto léxico por defecto de `FakeSpeechRecognizer`."""
+    return [
+        PronunciationIssue(
+            word="project",
+            score=48,
+            error_type="Mispronunciation",
+            weak_phonemes=["dʒ"],
+            word_index=7,
+        )
+    ]
+
+
 class FakeTextAnalyzer:
     model = "fake-llm"
     prompt_version = "fake"
@@ -86,8 +136,14 @@ class FakeTextAnalyzer:
 
 
 class FakeSpeechSynthesizer:
-    def synthesize(self, text: str, language: str) -> bytes:
-        return b""
+    """Devuelve bytes que identifican la voz y el texto; registra cada llamada."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, VoiceGender]] = []
+
+    def synthesize(self, text: str, language: str, voice: VoiceGender) -> bytes:
+        self.calls.append((text, language, voice))
+        return f"mp3:{voice}:{text}".encode()
 
 
 class LocalFolderAudioStorage:

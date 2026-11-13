@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from speak2mytrainer.application.ports import UserDirectory
 from speak2mytrainer.domain.errors import NotAllowedError, NotFoundError
-from speak2mytrainer.domain.models import Quota, Role, UserProfile
+from speak2mytrainer.domain.models import Quota, Role, UserProfile, VoiceGender
 
 FEEDBACK_LANGUAGES = {"es": "Español", "en": "English"}
 
@@ -35,6 +35,13 @@ def set_feedback_language(users: UserDirectory, user_id: str, language: str) -> 
         raise ValueError(f"Idioma no admitido: {language}")
     user = _get(users, user_id)
     user.feedback_language = language
+    users.save(user)
+    return user
+
+
+def set_tts_voice(users: UserDirectory, user_id: str, voice: VoiceGender) -> UserProfile:
+    user = _get(users, user_id)
+    user.tts_voice = VoiceGender(voice)
     users.save(user)
     return user
 

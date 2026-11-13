@@ -83,14 +83,62 @@ def test_transcriber(azure: AzureSettings, credential, sample_wav: Path) -> None
     assert len(transcript.text.split()) > 20
 
 
-def test_speech_recognizer_returns_timed_words(  # type: ignore[no-untyped-def]
-    azure: AzureSettings, credential, sample_wav: Path
+def _speech(azure: AzureSettings, fallback: bool = False):  # type: ignore[no-untyped-def]
+    from speak2mytrainer.adapters.outbound.azure_speech import SpeechResource
+
+    if not fallback:
+        return [SpeechResource(azure.azure_speech_resource_id, azure.azure_speech_region)]
+    if not azure.azure_speech_fallback_resource_id:
+        pytest.skip("Sin recurso S0 de respaldo en .env")
+    region = azure.azure_speech_fallback_region or azure.azure_speech_region
+    return [SpeechResource(azure.azure_speech_fallback_resource_id, region)]
+
+
+@pytest.mark.parametrize("fallback", [False, True], ids=["f0", "s0"])
+def test_speech_assesses_pronunciation(  # type: ignore[no-untyped-def]
+    azure: AzureSettings, credential, sample_wav: Path, fallback: bool
 ) -> None:
     from speak2mytrainer.adapters.outbound.azure_speech import AzureSpeechRecognizer
 
-    result = AzureSpeechRecognizer(
-        credential, azure.azure_speech_resource_id, azure.azure_speech_region
-    ).recognize(sample_wav, "en")
+    recognizer = AzureSpeechRecognizer(credential, _speech(azure, fallback))
+    result = recognizer.recognize(sample_wav, "en", assess_pronunciation=True)
+    pa = result.pronunciation
+    assert pa is not None
+    assert 0 < pa.pron_score <= 100
+    assert pa.prosody is not None  # en-US
+    assert all(0 <= (i.word_index or 0) < len(result.verbatim.words) for i in pa.issues)
+
+
+@pytest.mark.parametrize("voice", ["female", "male"])
+def test_speech_synthesizer_returns_mp3(  # type: ignore[no-untyped-def]
+    azure: AzureSettings, credential, voice: str
+) -> None:
+    from speak2mytrainer.adapters.outbound.azure_speech import AzureSpeechSynthesizer
+    from speak2mytrainer.domain.models import VoiceGender
+
+    synthesizer = AzureSpeechSynthesizer(
+        credential,
+        _speech(azure),
+        {
+            VoiceGender.FEMALE: azure.azure_tts_voice_female,
+            VoiceGender.MALE: azure.azure_tts_voice_male,
+        },
+    )
+    data = synthesizer.synthesize("We built it in two weeks.", "en", VoiceGender(voice))
+    assert len(data) > 2000
+    assert data[:3] == b"ID3" or data[0] == 0xFF  # cabecera ID3 o marco MPEG
+
+
+def test_speech_recognizer_returns_timed_words(  # type: ignore[no-untyped-def]
+    azure: AzureSettings, credential, sample_wav: Path
+) -> None:
+    from speak2mytrainer.adapters.outbound.azure_speech import (
+        AzureSpeechRecognizer,
+        SpeechResource,
+    )
+
+    resource = SpeechResource(azure.azure_speech_resource_id, azure.azure_speech_region)
+    result = AzureSpeechRecognizer(credential, [resource]).recognize(sample_wav, "en")
     words = result.verbatim.words
     assert len(words) > 20
     assert result.verbatim.lexical.split()[0] == words[0].text

@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 
 from speak2mytrainer.domain.errors import AudioDurationError
-from speak2mytrainer.domain.models import Filler, FillerType, Metrics, VerbatimTranscript
+from speak2mytrainer.domain.models import (
+    Filler,
+    FillerType,
+    Metrics,
+    PronunciationAssessment,
+    VerbatimTranscript,
+)
 
 MIN_DURATION_SEC = 10.0
 MAX_DURATION_SEC = 600.0
@@ -55,9 +61,11 @@ def build_metrics(
     duration_sec: float,
     fillers: list[Filler],
     verbatim: VerbatimTranscript | None = None,
+    pronunciation: PronunciationAssessment | None = None,
 ) -> Metrics:
     """Con la transcripción verbatim, las palabras salen de la forma léxica (incluye muletillas) y
-    el ritmo se mide sobre el tiempo de habla, sin silencios al inicio ni al final."""
+    el ritmo se mide sobre el tiempo de habla, sin silencios al inicio ni al final. Los puntajes
+    de pronunciación se copian tal cual de Speech."""
     words = count_words(verbatim.lexical if verbatim else transcript)
     speaking = (verbatim.speaking_span_sec() if verbatim else None) or duration_sec
     return Metrics(
@@ -66,4 +74,8 @@ def build_metrics(
         wpm=compute_wpm(words, speaking),
         fillers_per_min=fillers_per_minute(fillers, speaking),
         restarts=count_restarts(fillers),
+        pron_score=pronunciation.pron_score if pronunciation else None,
+        accuracy=pronunciation.accuracy if pronunciation else None,
+        fluency=pronunciation.fluency if pronunciation else None,
+        prosody=pronunciation.prosody if pronunciation else None,
     )

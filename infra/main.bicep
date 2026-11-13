@@ -76,6 +76,18 @@ module speech 'modules/speech.bicep' = {
   }
 }
 
+// Respaldo de pago por uso: solo se llama cuando F0 agota sus 5 h del mes o rechaza por
+// concurrencia. Sin uso no cuesta nada.
+module speechFallback 'modules/speech.bicep' = {
+  scope: rg
+  params: {
+    name: 'spch-${prefix}-${suffix}-s0'
+    location: location
+    tags: tags
+    sku: 'S0'
+  }
+}
+
 module openai 'modules/openai.bicep' = {
   scope: rg
   params: {
@@ -111,6 +123,7 @@ module developerRoles 'modules/roles.bicep' = {
     principalId: developerPrincipalId
     principalType: 'User'
     speechAccountName: speech.outputs.name
+    speechFallbackAccountName: speechFallback.outputs.name
     openaiAccountName: openai.outputs.name
     cosmosAccountName: cosmos.outputs.name
     storageAccountName: storage.outputs.name
@@ -137,6 +150,8 @@ module apps 'modules/containerapps.bicep' = if (deployApps) {
       { name: 'AZURE_OPENAI_LLM_DEPLOYMENT', value: llmDeploymentName }
       { name: 'AZURE_SPEECH_RESOURCE_ID', value: speech.outputs.id }
       { name: 'AZURE_SPEECH_REGION', value: location }
+      { name: 'AZURE_SPEECH_FALLBACK_RESOURCE_ID', value: speechFallback.outputs.id }
+      { name: 'AZURE_SPEECH_FALLBACK_REGION', value: location }
       { name: 'AZURE_COSMOS_ENDPOINT', value: cosmos.outputs.endpoint }
       { name: 'AZURE_COSMOS_DATABASE', value: cosmos.outputs.databaseName }
       { name: 'AZURE_STORAGE_BLOB_ENDPOINT', value: storage.outputs.blobEndpoint }
@@ -151,6 +166,7 @@ module appRoles 'modules/roles.bicep' = if (deployApps) {
     principalId: deployApps ? apps!.outputs.identityPrincipalId : ''
     principalType: 'ServicePrincipal'
     speechAccountName: speech.outputs.name
+    speechFallbackAccountName: speechFallback.outputs.name
     openaiAccountName: openai.outputs.name
     cosmosAccountName: cosmos.outputs.name
     storageAccountName: storage.outputs.name
@@ -197,6 +213,7 @@ output logAnalyticsWorkspaceId string = monitoring.outputs.id
 output speechResourceId string = speech.outputs.id
 output speechEndpoint string = speech.outputs.endpoint
 output speechRegion string = location
+output speechFallbackResourceId string = speechFallback.outputs.id
 output openaiEndpoint string = openai.outputs.endpoint
 output transcribeDeployment string = transcribeDeploymentName
 output llmDeployment string = llmDeploymentName

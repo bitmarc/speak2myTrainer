@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from speak2mytrainer.adapters.inbound.streamlit_app import WebContext
-from speak2mytrainer.adapters.inbound.streamlit_app.format import format_date
+from speak2mytrainer.adapters.inbound.streamlit_app.format import VOICE_LABELS, format_date
 from speak2mytrainer.adapters.inbound.streamlit_app.nav import Nav
 from speak2mytrainer.application.use_cases import access
 from speak2mytrainer.application.use_cases.practices import create_practice, delete_history
@@ -69,6 +69,18 @@ def preferences(ctx: WebContext, user: UserProfile) -> None:
     )
     if language != user.feedback_language:
         access.set_feedback_language(ctx.container.users, user.id, language)
+        st.toast("Preferencia guardada")
+
+    voices = list(VOICE_LABELS)
+    voice = st.radio(
+        "Voz para escuchar la versión mejorada",
+        voices,
+        index=voices.index(user.tts_voice),
+        format_func=VOICE_LABELS.__getitem__,
+        horizontal=True,
+    )
+    if voice != user.tts_voice:
+        access.set_tts_voice(ctx.container.users, user.id, voice)
         st.toast("Preferencia guardada")
 
     st.subheader("Cuota del mes")

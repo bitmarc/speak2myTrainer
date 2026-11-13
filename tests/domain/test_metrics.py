@@ -75,3 +75,16 @@ def test_build_metrics_uses_verbatim_words_and_speaking_time() -> None:
     assert metrics.words == 4
     assert metrics.wpm == 120.0
     assert metrics.fillers_per_min == 30.0
+
+
+def test_build_metrics_copies_pronunciation_scores() -> None:
+    from speak2mytrainer.domain.models import PronunciationAssessment
+
+    pa = PronunciationAssessment(pron_score=84.0, accuracy=90.9, fluency=90.8, prosody=None)
+    metrics = build_metrics("one two three", 60, [], pronunciation=pa)
+    assert (metrics.pron_score, metrics.accuracy, metrics.fluency, metrics.prosody) == (
+        84.0,
+        90.9,
+        90.8,
+        None,
+    )

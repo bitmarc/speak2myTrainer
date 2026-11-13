@@ -40,7 +40,14 @@ class SubmitAttempt:
     queue: JobQueue
     converter: AudioConverter
 
-    def __call__(self, user_id: str, practice_id: str, data: bytes, filename: str) -> Attempt:
+    def __call__(
+        self,
+        user_id: str,
+        practice_id: str,
+        data: bytes,
+        filename: str,
+        assess_pronunciation: bool = False,
+    ) -> Attempt:
         practice = get_practice(self.practices, user_id, practice_id)
         suffix = PurePath(filename).suffix.lower() or ".wav"
         if suffix not in CONTENT_TYPES:
@@ -73,6 +80,7 @@ class SubmitAttempt:
             number=practice.attempt_count + 1,
             audio_blob=blob,
             duration_sec=round(duration, 1),
+            assess_pronunciation=assess_pronunciation,
         )
         self.practices.add_attempt(attempt)
         practice.attempt_count = attempt.number

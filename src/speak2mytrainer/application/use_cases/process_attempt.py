@@ -1,4 +1,4 @@
-"""Pipeline del job: audio → transcripciones → disfluencias → LLM → métricas → done."""
+"""Pipeline del job: audio → transcripciones → (pronunciación) → disfluencias → LLM → métricas."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from speak2mytrainer.domain.models import (
     ModelInfo,
     can_transition,
 )
+from speak2mytrainer.domain.pronunciation import grounded_issues
 
 
 @dataclass(frozen=True)
@@ -86,11 +87,30 @@ class ProcessAttempt:
                 recognition_future = pool.submit(self.recognizer.recognize, wav, language)
                 transcript = transcript_future.result()
                 verbatim = recognition_future.result().verbatim
+            attempt.transcript = transcript.text
+            attempt.verbatim_transcript = verbatim.lexical
 
-        attempt.transcript = transcript.text
-        attempt.verbatim_transcript = verbatim.lexical
+            # La evaluación va en una pasada aparte: en la misma pasada Speech pierde ~60% de
+            # las hesitaciones (gate del ADR 0003). Va después, porque F0 admite una sola
+            # solicitud a la vez.
+            pronunciation = None
+            if attempt.assess_pronunciation:
+                self._save(attempt, AttemptStatus.ASSESSING)
+                assessed = self.recognizer.recognize(wav, language, assess_pronunciation=True)
+                pronunciation = assessed.pronunciation
+                if pronunciation is not None:
+                    # Solo palabras que el texto de registro confirma: lo que Speech reconoció
+                    # mal no es un error de pronunciación del usuario.
+                    pronunciation.issues = grounded_issues(
+                        transcript.text,
+                        [w.text for w in assessed.verbatim.words],
+                        pronunciation.issues,
+                    )
+
+        attempt.pronunciation = pronunciation
         self._save(attempt, AttemptStatus.ANALYZING)
 
+        previous = self._previous(attempt)
         analysis = self.analyzer.analyze(
             AnalysisRequest(
                 transcript=transcript.text,
@@ -99,14 +119,22 @@ class ProcessAttempt:
                 practice_language=language,
                 verbatim=verbatim.lexical,
                 candidates=tuple(disfluency_candidates(transcript.text, verbatim.lexical)),
+                previous_transcript=previous.transcript if previous else None,
+                previous_analysis=previous.analysis if previous else None,
             )
         )
         # Las hesitaciones las cuenta Python sobre la forma léxica; del LLM solo se toman
         # reinicios y muletillas léxicas (ADR 0002).
         analysis.fillers = combine_fillers(verbatim.lexical, analysis.fillers)
+        if analysis.comparison is not None and previous is not None and previous.analysis:
+            analysis.comparison.fillers_before = len(previous.analysis.fillers)
+            analysis.comparison.fillers_after = len(analysis.fillers)
+            analysis.comparison.previous_attempt_number = previous.number
+        else:
+            analysis.comparison = None
         attempt.analysis = analysis
         attempt.metrics = build_metrics(
-            transcript.text, attempt.duration_sec, analysis.fillers, verbatim
+            transcript.text, attempt.duration_sec, analysis.fillers, verbatim, pronunciation
         )
         attempt.models = ModelInfo(
             transcribe=transcript.model,
@@ -114,6 +142,15 @@ class ProcessAttempt:
             prompt_version=self.analyzer.prompt_version,
         )
         self._save(attempt, AttemptStatus.DONE)
+
+    def _previous(self, attempt: Attempt) -> Attempt | None:
+        """El último intento analizado de la misma práctica antes de este (RF-15)."""
+        done = [
+            a
+            for a in self.practices.list_attempts(attempt.user_id, attempt.practice_id)
+            if a.status is AttemptStatus.DONE and a.number < attempt.number and a.analysis
+        ]
+        return max(done, key=lambda a: a.number, default=None)
 
     def _fail(self, attempt: Attempt, exc: Exception, *, final: bool) -> None:
         if not can_transition(attempt.status, AttemptStatus.FAILED):

@@ -203,6 +203,10 @@ def test_process_runs_full_pipeline(world: World) -> None:
     assert attempt.metrics.words == 9
     assert attempt.metrics.wpm == pytest.approx(150.0)  # 9 palabras en 3.6 s de habla
     assert attempt.metrics.restarts == 1
+    # Sin pedirla no hay pronunciación ni segunda pasada de Speech.
+    assert attempt.pronunciation is None
+    assert attempt.metrics.pron_score is None
+    assert world.recognizer.calls == [False]
     assert attempt.models is not None
     assert attempt.models.prompt_version == "fake"
 
@@ -210,6 +214,63 @@ def test_process_runs_full_pipeline(world: World) -> None:
     assert request.context == "Tell me about it"
     assert request.verbatim == "well um i once worked on on a project"
     assert request.candidates == ("once worked on [on] a project",)
+
+
+def test_pronunciation_is_a_second_speech_pass(world: World) -> None:
+    from speak2mytrainer.domain.models import PronunciationIssue
+
+    world.recognizer.issues = [
+        PronunciationIssue(word="project", score=41, error_type="Mispronunciation", word_index=8),
+        PronunciationIssue(word="on", score=30, error_type="Mispronunciation", word_index=6),
+    ]
+    practice = practices.create_practice(world.practices, USER, "Entrevista")
+    world.submit(USER, practice.id, b"audio", "a.wav", assess_pronunciation=True)
+    statuses: list[AttemptStatus] = []
+    update = world.practices.update_attempt
+    world.practices.update_attempt = lambda a: (statuses.append(a.status), update(a))[1]  # type: ignore[method-assign]
+
+    attempt = world.process(world.queue.jobs.popleft(), final=False)
+
+    assert attempt is not None and attempt.pronunciation is not None
+    assert world.recognizer.calls == [False, True]
+    assert statuses == [
+        AttemptStatus.TRANSCRIBING,
+        AttemptStatus.ASSESSING,
+        AttemptStatus.ANALYZING,
+        AttemptStatus.DONE,
+    ]
+    # El "on" repetido no existe en el texto de registro: se descarta.
+    assert [i.word for i in attempt.pronunciation.issues] == ["project"]
+    assert attempt.metrics is not None
+    assert attempt.metrics.pron_score == attempt.pronunciation.pron_score
+    # Las muletillas siguen saliendo de la pasada sin evaluación.
+    assert attempt.verbatim_transcript == "well um i once worked on on a project"
+
+
+def test_second_attempt_is_compared_with_the_previous_one(world: World) -> None:
+    from speak2mytrainer.domain.models import Comparison
+
+    # El fake devuelve comparación siempre; en el primer intento se descarta.
+    world.analyzer.analysis.comparison = Comparison(fixed=["participated in"])
+    first = _submitted(world)
+    first_attempt = world.process(first, final=False)
+    assert first_attempt is not None and first_attempt.analysis is not None
+    assert first_attempt.analysis.comparison is None
+    assert world.analyzer.requests[0].previous_transcript is None
+
+    world.submit(USER, first.practice_id, b"audio", "b.wav")
+    second = world.process(world.queue.jobs.popleft(), final=False)
+
+    assert second is not None and second.analysis is not None
+    request = world.analyzer.requests[1]
+    assert request.previous_transcript == "Well, I once worked on a project."
+    assert request.previous_analysis == first_attempt.analysis
+    comparison = second.analysis.comparison
+    assert comparison is not None
+    assert comparison.fixed == ["participated in"]
+    assert comparison.previous_attempt_number == 1
+    # Conteos de Python con las muletillas combinadas (um de Python + "on" repetido).
+    assert (comparison.fillers_before, comparison.fillers_after) == (2, 2)
 
 
 def test_process_is_idempotent_once_done(world: World) -> None:
@@ -304,3 +365,40 @@ def test_configured_admin_keeps_admin_role() -> None:
     users = fakes.InMemoryUserDirectory([UserProfile(id=ADMIN, name="Marco", allowed=False)])
     user = access.resolve_user(users, ADMIN, None, admin_email=ADMIN)
     assert (user.role, user.allowed) == (Role.ADMIN, True)
+
+
+def test_improved_audio_is_generated_once_per_voice(world: World, tmp_path: Path) -> None:
+    from speak2mytrainer.domain.models import VoiceGender
+
+    synthesizer = fakes.FakeSpeechSynthesizer()
+    attempt = world.process(_submitted(world), final=False)
+    assert attempt is not None
+    user = world.users.get(USER)
+    assert user is not None
+
+    def listen() -> str:
+        return practices.improved_audio(world.practices, world.audio, synthesizer, user, attempt.id)
+
+    path = listen()
+    assert path == f"tts/{USER}/{attempt.practice_id}/{attempt.id}-female.mp3"
+    assert world.audio.read(path) == b"mp3:female:Well, I once worked on a project."
+    assert listen() == path
+    assert len(synthesizer.calls) == 1  # la segunda vez sale de la caché
+
+    user = access.set_tts_voice(world.users, USER, VoiceGender.MALE)
+    assert listen().endswith("-male.mp3")
+    assert [voice for _, _, voice in synthesizer.calls] == ["female", "male"]
+
+    # Borrar la práctica también borra su TTS.
+    practices.delete_practice(world.practices, world.audio, USER, attempt.practice_id)
+    assert not [f for f in tmp_path.rglob("*.mp3")]
+
+
+def test_improved_audio_needs_a_finished_attempt(world: World) -> None:
+    job = _submitted(world)
+    user = world.users.get(USER)
+    assert user is not None
+    with pytest.raises(NotFoundError):
+        practices.improved_audio(
+            world.practices, world.audio, fakes.FakeSpeechSynthesizer(), user, job.attempt_id
+        )

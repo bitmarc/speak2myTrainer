@@ -6,6 +6,7 @@ param principalId string
 param principalType string
 
 param speechAccountName string
+param speechFallbackAccountName string
 param openaiAccountName string
 param cosmosAccountName string
 param storageAccountName string
@@ -24,6 +25,10 @@ resource speech 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
   name: speechAccountName
 }
 
+resource speechFallback 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+  name: speechFallbackAccountName
+}
+
 resource openai 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
   name: openaiAccountName
 }
@@ -39,6 +44,19 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
 resource speechUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: speech
   name: guid(speech.id, principalId, roleIds.cognitiveServicesSpeechUser)
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      roleIds.cognitiveServicesSpeechUser
+    )
+  }
+}
+
+resource speechFallbackUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: speechFallback
+  name: guid(speechFallback.id, principalId, roleIds.cognitiveServicesSpeechUser)
   properties: {
     principalId: principalId
     principalType: principalType

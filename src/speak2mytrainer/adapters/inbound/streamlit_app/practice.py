@@ -11,13 +11,19 @@ from speak2mytrainer.adapters.inbound.streamlit_app.format import (
     format_date,
 )
 from speak2mytrainer.adapters.inbound.streamlit_app.nav import Nav
-from speak2mytrainer.adapters.inbound.streamlit_app.result import render_attempt
+from speak2mytrainer.adapters.inbound.streamlit_app.result import (
+    HIDE_IMPROVED_KEY,
+    HIDE_IMPROVED_WIDGET,
+    new_attempt_key,
+    render_attempt,
+)
 from speak2mytrainer.application.use_cases.practices import delete_practice
 from speak2mytrainer.domain.errors import DomainError
 from speak2mytrainer.domain.metrics import MAX_DURATION_SEC, MIN_DURATION_SEC
 from speak2mytrainer.domain.models import Practice, UserProfile, utcnow
 
 UPLOAD_TYPES = ["m4a", "mp3", "wav", "ogg", "webm", "aac"]
+ASSESS_KEY = "assess-pronunciation"
 
 
 def practice_page(ctx: WebContext, user: UserProfile, nav: Nav) -> None:
@@ -53,12 +59,24 @@ def practice_page(ctx: WebContext, user: UserProfile, nav: Nav) -> None:
         render_attempt(ctx, by_id[choice])
         st.divider()
 
-    _recorder(ctx, user, practice, first=not attempts)
+    open_key = new_attempt_key(practice.id)
+    if not attempts or st.session_state.get(open_key):
+        _recorder(ctx, user, practice, first=not attempts)
+    elif st.button("Nuevo intento", type="primary", icon=":material/mic:"):
+        st.session_state[open_key] = True
+        st.rerun()
     _danger_zone(ctx, user, practice, nav)
 
 
 def _recorder(ctx: WebContext, user: UserProfile, practice: Practice, *, first: bool) -> None:
     st.subheader("Graba tu respuesta" if first else "Nuevo intento")
+    open_key = new_attempt_key(practice.id)
+    if not first:
+        st.session_state[HIDE_IMPROVED_KEY] = st.toggle(
+            "Ocultar la versión mejorada mientras grabo",
+            value=st.session_state.get(HIDE_IMPROVED_KEY, True),
+            key=HIDE_IMPROVED_WIDGET,
+        )
     quota = user.quota.model_copy()
     quota.roll_over_if_needed(utcnow())
     st.caption(
@@ -78,8 +96,20 @@ def _recorder(ctx: WebContext, user: UserProfile, practice: Practice, *, first: 
         if upload is not None:
             st.audio(upload)
 
+    # Se recuerda en la sesión aparte del widget, que se vacía con cada grabación nueva.
+    st.session_state[ASSESS_KEY] = st.checkbox(
+        "Evaluar también la pronunciación",
+        value=st.session_state.get(ASSESS_KEY, False),
+        key=f"assess-{nonce}",
+        help="Puntajes de pronunciación, fluidez y prosodia, y palabras a practicar. "
+        "El análisis tarda más o menos el doble.",
+    )
+
     audio = recording or upload
     if audio is None:
+        if not first and st.button("Cancelar"):
+            st.session_state[open_key] = False
+            st.rerun()
         return
     left, right = st.columns(2)
     if left.button("Enviar para análisis", type="primary", use_container_width=True):
@@ -87,7 +117,11 @@ def _recorder(ctx: WebContext, user: UserProfile, practice: Practice, *, first: 
         with st.spinner("Enviando…"):
             try:
                 attempt = ctx.container.submit_attempt(
-                    user.id, practice.id, audio.getvalue(), filename
+                    user.id,
+                    practice.id,
+                    audio.getvalue(),
+                    filename,
+                    assess_pronunciation=bool(st.session_state[ASSESS_KEY]),
                 )
             except DomainError as exc:
                 st.error(str(exc))
@@ -95,6 +129,7 @@ def _recorder(ctx: WebContext, user: UserProfile, practice: Practice, *, first: 
             if ctx.after_submit:
                 ctx.after_submit()
         st.session_state["recorder_nonce"] = nonce + 1
+        st.session_state[open_key] = False
         st.query_params["intento"] = attempt.id
         st.rerun()
     if right.button(

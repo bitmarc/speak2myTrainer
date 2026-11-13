@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from speak2mytrainer.domain.models import AttemptStatus, FillerType, Severity
+from speak2mytrainer.domain.models import AttemptStatus, FillerType, Severity, VoiceGender
 
 STATUS_LABELS = {
     AttemptStatus.QUEUED: "En cola",
@@ -20,6 +20,18 @@ FILLER_LABELS = {
     FillerType.HESITATION: "Pausa de duda",
     FillerType.RESTART: "Reinicio",
     FillerType.LEXICAL: "Muletilla léxica",
+}
+
+VOICE_LABELS = {
+    VoiceGender.FEMALE: "Femenina",
+    VoiceGender.MALE: "Masculina",
+}
+
+SCORE_HELP = {
+    "pron_score": "Puntaje general de pronunciación de Azure AI Speech, de 0 a 100.",
+    "accuracy": "Qué tan cerca de un hablante nativo suenan los sonidos de cada palabra.",
+    "fluency": "Ritmo y pausas: qué tan fluido suena el discurso, sin cortes inesperados.",
+    "prosody": "Entonación, acento y ritmo de las frases (solo en inglés de EE. UU.).",
 }
 
 SEVERITY_LABELS = {

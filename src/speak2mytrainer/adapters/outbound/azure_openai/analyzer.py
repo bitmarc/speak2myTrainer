@@ -60,7 +60,7 @@ class AzureOpenAITextAnalyzer:
         if request.verbatim is not None:
             payload["verbatim"] = request.verbatim
             payload["disfluency_candidates"] = list(request.candidates)
-        previous_fillers: int | None = None
+        has_previous = request.previous_transcript is not None
         if request.previous_transcript is not None:
             payload["previous_attempt"] = {
                 "transcript": request.previous_transcript,
@@ -70,8 +70,6 @@ class AzureOpenAITextAnalyzer:
                     else None
                 ),
             }
-            if request.previous_analysis is not None:
-                previous_fillers = len(request.previous_analysis.fillers)
 
         completion = self._client.chat.completions.parse(
             model=self._deployment,
@@ -85,4 +83,4 @@ class AzureOpenAITextAnalyzer:
         message = completion.choices[0].message
         if message.parsed is None:
             raise RuntimeError(f"El modelo no devolvió un análisis válido: {message.refusal}")
-        return message.parsed.to_domain(request.transcript, request.verbatim, previous_fillers)
+        return message.parsed.to_domain(request.transcript, request.verbatim, has_previous)

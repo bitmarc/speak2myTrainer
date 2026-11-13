@@ -38,6 +38,8 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Set de evaluación (0 FP y recall >= 90%)
+        # `shell: bash` activa pipefail: sin él, el `| tee` ocultaría el exit 1 de --strict.
+        shell: bash
         env:
           AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_LLM_DEPLOYMENT: ${{ vars.AZURE_OPENAI_LLM_DEPLOYMENT }}

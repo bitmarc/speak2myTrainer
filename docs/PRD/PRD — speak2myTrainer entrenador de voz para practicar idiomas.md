@@ -102,7 +102,7 @@ El criterio de calidad número uno es cero falsos positivos: la herramienta pier
 | Aspecto | Objetivo |
 | --- | --- |
 | Duración de audio | 10 s a 10 min |
-| Tiempo de análisis | \~0.5× la duración del audio más el arranque del job (\~3 min para 5 min de audio). Decidido el 12-nov-2026: Speech F0 procesa a ese ritmo con una sola solicitud a la vez (ADR 0002) |
+| Tiempo de análisis | \~0.5× la duración del audio más el arranque del job (\~3 min para 5 min de audio). Decidido el 12-nov-2026: Speech F0 procesa a ese ritmo con una sola solicitud a la vez (ADR 0002). Medido el 13-nov-2026 desde el envío hasta ver el resultado: audio de 1 min en \~1:15; dos audios de 1:16 enviados a la vez por dos usuarios, 1:30 y 2:18 (el job procesa uno por uno, así que el segundo espera en la cola) |
 | Disponibilidad | Mejor esfuerzo; escalado a cero |
 | Costo | ≤ 15 USD/mes total, con alertas de presupuesto en Azure al 50%, 80% y 100% |
 | Seguridad | HTTPS, login Google, lista blanca, secretos en Key Vault o variables seguras, identidad administrada hacia los servicios de Azure |
@@ -288,14 +288,15 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 ### Fase 1 · MVP de análisis de texto
 
 - [x] Bicep: entorno de Container Apps, web, job con disparador de cola, Storage, Cosmos, identidad administrada
-- [ ] GitHub Actions: tests, build de imagen a GHCR y despliegue (workflows listos; falta correr `scripts/setup-github-oidc.ps1`)
+- [x] GitHub Actions: tests, build de imagen a GHCR y despliegue con OIDC, sin secretos
 - [x] Easy Auth con Google, lista blanca y rol admin
 - [x] Pantallas: nueva práctica con contexto, grabar o subir, reintentar, estado del procesamiento, resultado, historial
 - [x] Validación de 10 s a 10 min y conversión con ffmpeg
 - [x] Job: transcripción híbrida (ADR 0002), métricas en Python, LLM con esquema JSON (muletillas, usos válidos, gramática, versión mejorada, próximos pasos)
 - [x] Preferencia de idioma de explicaciones (español por defecto) y cuota mensual por usuario
 - [x] Borrar práctica y todo el historial (adelantado de la Fase 3)
-- [ ] Set de evaluación inicial de 30 frases (32 casos, etiquetas revisadas por Marco; el set de prueba con fragmentos reales tiene 0 FP y recall de 93% en muletillas, pero 50% en errores)
+- [x] Puerta: Marco y un amigo agregado desde Admin completan el ciclo, desde el celular y la PC (13-nov-2026)
+- [x] Set de evaluación inicial de 30 frases: 32 casos, 10 de ellos fragmentos reales como set de prueba con etiquetas revisadas por Marco. Al cierre, el set de prueba tiene 0 FP y recall de 89–93% en muletillas, pero 50–75% en errores (solo 4 errores; varía entre corridas). Marco aceptó cerrar así y mejorar los errores en la Fase 2
 
 ### Fase 2 · Pronunciación y repetición
 
@@ -304,13 +305,14 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 - [ ] Repetir sobre la misma práctica y comparación con el intento anterior
 - [ ] TTS de la versión mejorada en caché y botón para ocultar o difuminar
 - [ ] Set de evaluación a 50 frases, ejecutado en CI cuando cambian prompts o modelos
+- [ ] Recall de errores ≥ 90% en el set de prueba: prompt v2 ajustado solo con casos nuevos de desarrollo (comparativos mal formados, artículo con sustantivos incontables, citar solo el texto de registro), y medir varias corridas por la variación del LLM
 
 ### Fase 3 · Pulido para portafolio
 
 - [ ] Application Insights con trazas por intento (tiempos y costo estimado)
 - [ ] Compresión a Opus tras el análisis y regla de ciclo de vida a Cool
-- [ ] Borrar práctica y todo el historial
-- [ ] Panel de admin: lista blanca, cuotas, gasto del mes
+- [x] Borrar práctica y todo el historial (hecho en la Fase 1)
+- [ ] Panel de admin: gasto del mes (lista blanca y cuotas, hechos en la Fase 1)
 - [ ] README con diagrama, decisiones de arquitectura (ADR) y video demo
 
 ### Fase 4 · Expansión (opcional)
@@ -332,6 +334,7 @@ El riesgo más alto es técnico y se resuelve en la Fase 0: que el transcriptor 
 | Retiro de modelos en 2027 (transcriptor y LLM) | Medio | Deployment configurable, `promptVersion` en cada intento, set de evaluación para validar el reemplazo |
 | Cabecera de Easy Auth no disponible en la sesión de Streamlit | Medio | Validar en Fase 0; respaldo con `st.login` |
 | Arranque en frío de 10–20 s al abrir la app | Bajo | Aceptado; mensaje de carga; imagen ligera (`python:3.12-slim` + ffmpeg) |
+| Varios usuarios envían a la vez | Bajo: el job procesa uno por uno (Speech F0), así que el segundo resultado tarda \~1 min más | Aceptado con la lista blanca actual; el failover a S0 de la Fase 2 permitiría procesar en paralelo |
 | Gasto se dispara por un usuario | Bajo | Lista blanca, cuota mensual por usuario, alertas de presupuesto |
 | Audio de 10 min en WAV pesa \~19 MB | Bajo | Grabar a 16 kHz mono; comprimir a Opus tras el análisis |
 

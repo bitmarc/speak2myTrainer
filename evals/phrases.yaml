@@ -60,8 +60,7 @@
 
 - id: restart-we
   text: "We, um, we migrated the, the whole system to Kubernetes last year."
-  fillers: [um]
-  allow_fillers: [we, the, "we, um, we", "the, the"]
+  fillers: [um, we, the]
   errors: []
 
 - id: you-know-literal

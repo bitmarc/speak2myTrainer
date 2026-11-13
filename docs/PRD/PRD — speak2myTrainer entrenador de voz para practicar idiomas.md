@@ -295,7 +295,7 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 - [x] Job: transcripción híbrida (ADR 0002), métricas en Python, LLM con esquema JSON (muletillas, usos válidos, gramática, versión mejorada, próximos pasos)
 - [x] Preferencia de idioma de explicaciones (español por defecto) y cuota mensual por usuario
 - [x] Borrar práctica y todo el historial (adelantado de la Fase 3)
-- [ ] Set de evaluación inicial de 30 frases (32 casos; el set de prueba con fragmentos reales tiene 0 FP pero recall de 56% en muletillas y 50% en errores)
+- [ ] Set de evaluación inicial de 30 frases (32 casos, etiquetas revisadas por Marco; el set de prueba con fragmentos reales tiene 0 FP y recall de 93% en muletillas, pero 50% en errores)
 
 ### Fase 2 · Pronunciación y repetición
 

@@ -1,5 +1,11 @@
-from speak2mytrainer.domain.disfluency import disfluency_candidates, hesitations, tokenize
-from speak2mytrainer.domain.models import FillerType
+from speak2mytrainer.domain.disfluency import (
+    combine_fillers,
+    disfluency_candidates,
+    hesitations,
+    repetitions,
+    tokenize,
+)
+from speak2mytrainer.domain.models import Filler, FillerType
 
 
 def test_tokenize_normalizes_case_punctuation_and_hyphens() -> None:
@@ -36,3 +42,38 @@ def test_candidates_ignore_numbers_spacing_and_bare_hesitations() -> None:
 
 def test_no_candidates_when_texts_match() -> None:
     assert disfluency_candidates("I like learn.", "i like learn") == []
+
+
+def test_repetitions_count_the_discarded_copy() -> None:
+    found = repetitions("so we solved it to to make the rules or or flow")
+    assert [f.token for f in found] == ["to", "or"]
+    assert found[0].quote == "we solved it to to make the rules"
+    assert all(f.type is FillerType.RESTART for f in found)
+
+
+def test_repetitions_across_hesitations_phrases_and_cut_words() -> None:
+    lexical = "after um after a feature i have i have the constraint constraints valid validates"
+    assert [f.token for f in repetitions(lexical)] == ["after", "i have", "constraint", "valid"]
+
+
+def test_repetitions_keep_grammatical_doubles() -> None:
+    assert repetitions("i think that that is true and he had had enough very very good") == []
+    assert [f.token for f in repetitions("a problem that uh that was")] == ["that"]
+
+
+def test_repetitions_ignore_short_prefixes() -> None:
+    assert repetitions("it was on only one server in into") == []
+
+
+def test_combine_fillers_drops_llm_duplicates_of_python_repetitions() -> None:
+    llm = [
+        Filler(quote="and and you know", token="and and", type=FillerType.RESTART),
+        Filler(quote="and and you know", token="you know", type=FillerType.LEXICAL),
+        Filler(quote="um so", token="um", type=FillerType.HESITATION),
+    ]
+    combined = combine_fillers("um so the implementation and and you know", llm)
+    assert [(f.token, f.type) for f in combined] == [
+        ("um", FillerType.HESITATION),
+        ("and", FillerType.RESTART),
+        ("you know", FillerType.LEXICAL),
+    ]

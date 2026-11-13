@@ -35,25 +35,33 @@ if (-not $appId) {
 $principalId = az ad sp list --filter "appId eq '$appId'" --query '[0].id' -o tsv
 if (-not $principalId) { $principalId = az ad sp create --id $appId --query id -o tsv }
 
-$existing = az ad app federated-credential list --id $appId --query '[].subject' -o tsv
+# El prefijo del subject depende del repo: los repos nuevos usan el formato inmutable
+# (repo:owner@ownerId/name@repoId), que GitHub informa en sub_claim_prefix.
+$prefix = gh api "repos/$Repo/actions/oidc/customization/sub" --jq '.sub_claim_prefix // empty'
+if (-not $prefix) { $prefix = "repo:$Repo" }
 $subjects = @{
-  'main'         = "repo:${Repo}:ref:refs/heads/main"
-  'pull-request' = "repo:${Repo}:pull_request"
+  'main'         = "${prefix}:ref:refs/heads/main"
+  'pull-request' = "${prefix}:pull_request"
 }
 foreach ($name in $subjects.Keys) {
-  if ($existing -notcontains $subjects[$name]) {
-    $credential = @{
-      name      = $name
-      issuer    = 'https://token.actions.githubusercontent.com'
-      subject   = $subjects[$name]
-      audiences = @('api://AzureADTokenExchange')
-    } | ConvertTo-Json -Compress
-    $file = New-TemporaryFile
-    Set-Content -Path $file -Value $credential -Encoding utf8
-    az ad app federated-credential create --id $appId --parameters "@$file" --output none
-    Remove-Item $file
-    Write-Host "Credencial federada: $($subjects[$name])"
+  $current = az ad app federated-credential list --id $appId --query "[?name=='$name'].subject | [0]" -o tsv
+  if ($current -eq $subjects[$name]) { continue }
+  $credential = @{
+    name      = $name
+    issuer    = 'https://token.actions.githubusercontent.com'
+    subject   = $subjects[$name]
+    audiences = @('api://AzureADTokenExchange')
+  } | ConvertTo-Json -Compress
+  $file = New-TemporaryFile
+  Set-Content -Path $file -Value $credential -Encoding utf8
+  if ($current) {
+    az ad app federated-credential update --id $appId --federated-credential-id $name --parameters "@$file" --output none
   }
+  else {
+    az ad app federated-credential create --id $appId --parameters "@$file" --output none
+  }
+  Remove-Item $file
+  Write-Host "Credencial federada: $($subjects[$name])"
 }
 
 function Grant([string]$Role, [string]$Scope) {

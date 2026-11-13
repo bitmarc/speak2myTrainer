@@ -6,6 +6,7 @@ import logging
 import sys
 
 from speak2mytrainer.adapters.inbound import worker_job
+from speak2mytrainer.adapters.outbound import app_insights
 from speak2mytrainer.adapters.outbound.storage_queue import queue_client
 from speak2mytrainer.bootstrap import AzureSettings, Environment, Settings, build_container
 
@@ -26,9 +27,20 @@ def main() -> int:
     # después de construir el contenedor porque importar `openai` reconfigura su logger.
     for noisy in ("azure", "httpx"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
-    source = queue_client(AzureSettings().azure_storage_queue_endpoint, DefaultAzureCredential())
-    processed = worker_job.run(container, source)
-    logging.info("Mensajes procesados: %d", processed)
+    azure = AzureSettings()
+    credential = DefaultAzureCredential()
+    # Después de silenciar `azure`: el exportador también hace HTTP y no debe registrarse a sí
+    # mismo en un ciclo.
+    if azure.applicationinsights_connection_string:
+        app_insights.configure(
+            azure.applicationinsights_connection_string, credential, "s2mt-job", tracing=True
+        )
+    source = queue_client(azure.azure_storage_queue_endpoint, credential)
+    try:
+        processed = worker_job.run(container, source)
+        logging.info("Mensajes procesados: %d", processed)
+    finally:
+        app_insights.flush()
     return 0
 
 

@@ -64,7 +64,8 @@ def test_failover_moves_to_the_next_resource_and_remembers() -> None:
     from speak2mytrainer.adapters.outbound.azure_speech import SpeechResource, _Failover
     from speak2mytrainer.domain.errors import ServiceQuotaError
 
-    f0, s0 = SpeechResource("/x/spch-f0", "eastus2"), SpeechResource("/x/spch-s0", "eastus2")
+    f0 = SpeechResource("/x/spch-f0", "eastus2")
+    s0 = SpeechResource("/x/spch-s0", "eastus2", paid=True)
     calls: list[str] = []
 
     def call(resource: SpeechResource) -> str:
@@ -74,8 +75,9 @@ def test_failover_moves_to_the_next_resource_and_remembers() -> None:
         return "ok"
 
     failover = _Failover([f0, s0])
-    assert failover.run(call) == "ok"
-    assert failover.run(call) == "ok"
+    # Devuelve también quién respondió: el S0 se cobra en el costo estimado.
+    assert failover.run(call) == ("ok", s0)
+    assert failover.run(call)[1].paid
     # La segunda solicitud ya no toca F0 mientras dura la pausa.
     assert calls == ["/x/spch-f0", "/x/spch-s0", "/x/spch-s0"]
 

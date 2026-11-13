@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from speak2mytrainer.adapters.outbound import fakes
 from speak2mytrainer.application.container import Container
+from speak2mytrainer.domain.cost import Prices
 
 __all__ = ["AzureSettings", "Container", "Environment", "Settings", "build_container"]
 
@@ -50,6 +51,24 @@ class AzureSettings(BaseSettings):
     azure_cosmos_database: str
     azure_storage_blob_endpoint: str
     azure_storage_queue_endpoint: str
+    # Precios para el costo estimado de cada intento (USD). Si cambia el modelo o la región,
+    # se cambian estas variables, no el código. Valores del PRD (East US 2, 13-nov-2026).
+    # Application Insights (ADR 0005). Sin ella no se exporta telemetría.
+    applicationinsights_connection_string: str | None = None
+    price_llm_input_per_million: float = 0.40
+    price_llm_output_per_million: float = 1.60
+    price_transcribe_per_minute: float = 0.003
+    price_speech_per_hour: float = 1.0
+    price_tts_per_million_chars: float = 15.0
+
+    def prices(self) -> Prices:
+        return Prices(
+            llm_input_per_million=self.price_llm_input_per_million,
+            llm_output_per_million=self.price_llm_output_per_million,
+            transcribe_per_minute=self.price_transcribe_per_minute,
+            speech_per_hour=self.price_speech_per_hour,
+            tts_per_million_chars=self.price_tts_per_million_chars,
+        )
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -76,6 +95,7 @@ def _azure_container(settings: Settings, azure: AzureSettings) -> Container:
     # Imports diferidos: en local y en CI no hace falta cargar los SDK de Azure.
     from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
+    from speak2mytrainer.adapters.outbound.app_insights import OpenTelemetryTelemetry
     from speak2mytrainer.adapters.outbound.azure_openai.analyzer import AzureOpenAITextAnalyzer
     from speak2mytrainer.adapters.outbound.azure_openai.transcriber import AzureOpenAITranscriber
     from speak2mytrainer.adapters.outbound.azure_speech import (
@@ -104,6 +124,7 @@ def _azure_container(settings: Settings, azure: AzureSettings) -> Container:
             SpeechResource(
                 azure.azure_speech_fallback_resource_id,
                 azure.azure_speech_fallback_region or azure.azure_speech_region,
+                paid=True,
             )
         )
     cosmos = CosmosStore(azure.azure_cosmos_endpoint, azure.azure_cosmos_database, credential)
@@ -135,4 +156,6 @@ def _azure_container(settings: Settings, azure: AzureSettings) -> Container:
         users=CosmosUserDirectory(cosmos),
         queue=StorageQueueJobQueue(queue_client(azure.azure_storage_queue_endpoint, credential)),
         admin_email=settings.admin_email,
+        prices=azure.prices(),
+        telemetry=OpenTelemetryTelemetry(),
     )

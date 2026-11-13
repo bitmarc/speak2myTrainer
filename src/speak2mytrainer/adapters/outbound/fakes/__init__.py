@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
 
 from speak2mytrainer.application.ports import (
     AnalysisRequest,
+    AnalysisResult,
     AttemptJob,
+    Attribute,
     RecognitionResult,
+    Synthesis,
     Transcript,
 )
 from speak2mytrainer.domain.models import (
@@ -46,10 +51,12 @@ class FakeSpeechRecognizer:
         lexical: str = "well um i once worked on a project",
         seconds_per_word: float = 0.4,
         issues: list[PronunciationIssue] | None = None,
+        paid: bool = False,
     ) -> None:
         self.lexical = lexical
         self.seconds_per_word = seconds_per_word
         self.issues = issues or []
+        self.paid = paid  # simula que respondió el recurso S0
         self.calls: list[bool] = []  # assess_pronunciation de cada llamada
 
     def recognize(
@@ -75,6 +82,7 @@ class FakeSpeechRecognizer:
         return RecognitionResult(
             verbatim=VerbatimTranscript(lexical=self.lexical, words=words),
             pronunciation=pronunciation,
+            paid=self.paid,
         )
 
 
@@ -125,25 +133,33 @@ def demo_issues() -> list[PronunciationIssue]:
 class FakeTextAnalyzer:
     model = "fake-llm"
     prompt_version = "fake"
+    # Uso fijo por análisis, para que el costo estimado sea predecible en los tests.
+    input_tokens = 5_000
+    output_tokens = 2_500
 
     def __init__(self, analysis: TextAnalysis | None = None) -> None:
         self.analysis = analysis or TextAnalysis(improved_version="", next_steps=[])
         self.requests: list[AnalysisRequest] = []
 
-    def analyze(self, request: AnalysisRequest) -> TextAnalysis:
+    def analyze(self, request: AnalysisRequest) -> AnalysisResult:
         self.requests.append(request)
-        return self.analysis.model_copy(deep=True)
+        return AnalysisResult(
+            analysis=self.analysis.model_copy(deep=True),
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+        )
 
 
 class FakeSpeechSynthesizer:
     """Devuelve bytes que identifican la voz y el texto; registra cada llamada."""
 
-    def __init__(self) -> None:
+    def __init__(self, paid: bool = False) -> None:
         self.calls: list[tuple[str, str, VoiceGender]] = []
+        self.paid = paid
 
-    def synthesize(self, text: str, language: str, voice: VoiceGender) -> bytes:
+    def synthesize(self, text: str, language: str, voice: VoiceGender) -> Synthesis:
         self.calls.append((text, language, voice))
-        return f"mp3:{voice}:{text}".encode()
+        return Synthesis(audio=f"mp3:{voice}:{text}".encode(), paid=self.paid)
 
 
 class LocalFolderAudioStorage:
@@ -246,3 +262,25 @@ class InMemoryJobQueue:
 
     def enqueue(self, job: AttemptJob) -> None:
         self.jobs.append(job)
+
+
+class RecordingTelemetry:
+    """Registra los tramos abiertos y sus atributos, para verificar las trazas en los tests."""
+
+    def __init__(self) -> None:
+        self.spans: list[tuple[str, dict[str, Attribute]]] = []
+        self._open: list[dict[str, Attribute]] = []
+
+    @contextmanager
+    def span(self, name: str, **attributes: Attribute) -> Iterator[None]:
+        attrs = dict(attributes)
+        self.spans.append((name, attrs))
+        self._open.append(attrs)
+        try:
+            yield
+        finally:
+            self._open.pop()
+
+    def annotate(self, **attributes: Attribute) -> None:
+        if self._open:
+            self._open[-1].update(attributes)

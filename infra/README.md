@@ -50,6 +50,34 @@ Los dos usan la misma imagen; `S2MT_MODE` (`web` o `job`) decide qué arranca.
    ```
    En los siguientes despliegues basta con `-WebImage`: el script reutiliza el client ID, el secreto y el correo del admin que ya tiene la web.
 
+## Telemetría (Application Insights)
+
+`monitoring.bicep` crea `appi-log-...` sobre el workspace de Log Analytics, con su tope diario y sin autenticación local (ADR 0005). Las apps y el desarrollador envían telemetría con Entra (rol *Monitoring Metrics Publisher*). El job escribe una traza por intento; la web solo escribe logs y excepciones.
+
+Consultas en el portal (Application Insights → Logs):
+
+```kusto
+// Últimos intentos: duración total, audio y costo estimado
+dependencies
+| where name == "process_attempt"
+| project timestamp, attempt = tostring(customDimensions["attempt.id"]),
+    segundos = duration / 1000, audio = todouble(customDimensions["audio.seconds"]),
+    usd = todouble(customDimensions["cost.usd"]), success
+| order by timestamp desc
+
+// Cuánto tarda cada paso
+dependencies
+| where name in ("convert", "transcribe", "assess_pronunciation", "analyze", "compress_audio")
+| summarize p50 = percentile(duration, 50) / 1000, p95 = percentile(duration, 95) / 1000 by name
+
+// Costo estimado por día
+dependencies
+| where name == "process_attempt"
+| summarize usd = sum(todouble(customDimensions["cost.usd"])), intentos = count() by bin(timestamp, 1d)
+```
+
+Para ver la cascada de un intento: Transaction search → buscar el `attempt.id`.
+
 ## GitHub Actions sin secretos (OIDC)
 
 `scripts/setup-github-oidc.ps1` se corre una vez, después de desplegar las apps. Crea la app registration `gh-speak2mytrainer` con credenciales federadas para `main` y los pull requests, y le asigna roles mínimos:

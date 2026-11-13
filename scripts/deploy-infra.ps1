@@ -107,7 +107,8 @@ $lines = @(
   "AZURE_COSMOS_ENDPOINT=$($outputs.cosmosEndpoint.value)",
   "AZURE_COSMOS_DATABASE=$($outputs.cosmosDatabase.value)",
   "AZURE_STORAGE_BLOB_ENDPOINT=$($outputs.blobEndpoint.value)",
-  "AZURE_STORAGE_QUEUE_ENDPOINT=$($outputs.queueEndpoint.value)"
+  "AZURE_STORAGE_QUEUE_ENDPOINT=$($outputs.queueEndpoint.value)",
+  "APPLICATIONINSIGHTS_CONNECTION_STRING=$($outputs.appInsightsConnectionString.value)"
 )
 $lines | Set-Content -Path (Join-Path $root '.env') -Encoding utf8
 Write-Host "Listo. Outputs escritos en .env"

@@ -1,0 +1,59 @@
+"""Adaptador `Telemetry` con OpenTelemetry, exportado a Application Insights (ADR 0005).
+
+`configure` se llama una vez por proceso desde el entrypoint. Sin configurar, OpenTelemetry usa
+su proveedor vacío y los tramos no cuestan nada, así que el adaptador funciona igual en local.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from azure.core.credentials import TokenCredential
+from opentelemetry import trace
+
+from speak2mytrainer.application.ports import Attribute
+
+_TRACER_NAME = "speak2mytrainer"
+
+
+def configure(
+    connection_string: str, credential: TokenCredential, service: str, *, tracing: bool
+) -> None:
+    """Exporta logs (y trazas si `tracing`) a Application Insights con un token de Entra.
+
+    La web solo exporta logs: Streamlit consulta Cosmos cada pocos segundos y cada lectura
+    sería una dependencia, mucho volumen sin valor. El job exporta trazas, una por intento.
+    """
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    from opentelemetry.sdk.resources import Resource
+
+    configure_azure_monitor(
+        connection_string=connection_string,
+        credential=credential,
+        resource=Resource.create({"service.name": service}),
+        disable_tracing=not tracing,
+        disable_metrics=True,  # las métricas estándar no se usan y gastan ingesta
+    )
+
+
+def flush() -> None:
+    """Envía lo pendiente antes de que termine el proceso (el job vive pocos minutos)."""
+    provider = trace.get_tracer_provider()
+    force_flush = getattr(provider, "force_flush", None)
+    if force_flush is not None:
+        force_flush()
+
+
+class OpenTelemetryTelemetry:
+    def __init__(self) -> None:
+        self._tracer = trace.get_tracer(_TRACER_NAME)
+
+    @contextmanager
+    def span(self, name: str, **attributes: Attribute) -> Iterator[None]:
+        # Una excepción dentro del tramo queda registrada en él con estado de error.
+        with self._tracer.start_as_current_span(name, attributes=attributes):
+            yield
+
+    def annotate(self, **attributes: Attribute) -> None:
+        trace.get_current_span().set_attributes(attributes)

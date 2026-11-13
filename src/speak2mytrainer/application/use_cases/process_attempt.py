@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
 from speak2mytrainer.application.ports import (
     AnalysisRequest,
     AttemptJob,
+    Attribute,
     AudioConverter,
     AudioStorage,
+    NullTelemetry,
     PracticeRepository,
     SpeechRecognizer,
+    Telemetry,
     TextAnalyzer,
     Transcriber,
     UserDirectory,
 )
+from speak2mytrainer.domain.cost import Prices, Usage, estimate
 from speak2mytrainer.domain.disfluency import combine_fillers, disfluency_candidates
 from speak2mytrainer.domain.errors import DomainError
 from speak2mytrainer.domain.metrics import build_metrics
@@ -39,6 +43,8 @@ class ProcessAttempt:
     transcriber: Transcriber
     recognizer: SpeechRecognizer
     analyzer: TextAnalyzer
+    prices: Prices = field(default_factory=Prices)
+    telemetry: Telemetry = field(default_factory=NullTelemetry)
 
     def __call__(self, job: AttemptJob, *, final: bool) -> Attempt | None:
         """Procesa un intento. Si falla, lo marca `failed` y relanza la excepción.
@@ -54,11 +60,26 @@ class ProcessAttempt:
             attempt.advance(AttemptStatus.FAILED, error="Procesamiento interrumpido.")
         if attempt.status is AttemptStatus.FAILED:
             attempt.advance(AttemptStatus.QUEUED)
-        try:
-            self._run(attempt)
-        except Exception as exc:
-            self._fail(attempt, exc, final=final)
-            raise
+        # Un tramo por intento; sin correo ni texto del usuario (ADR 0005).
+        root: dict[str, Attribute] = {
+            "attempt.id": attempt.id,
+            "attempt.number": attempt.number,
+            "attempt.final_delivery": final,
+            "attempt.assess_pronunciation": attempt.assess_pronunciation,
+            "audio.seconds": attempt.duration_sec,
+        }
+        with self.telemetry.span("process_attempt", **root):
+            try:
+                self._run(attempt)
+            except Exception as exc:
+                self._fail(attempt, exc, final=final)
+                raise
+            self.telemetry.annotate(
+                **{
+                    "attempt.status": attempt.status.value,
+                    "cost.usd": attempt.cost_estimate_usd or 0,
+                }
+            )
         return attempt
 
     def abandon(self, job: AttemptJob, reason: str) -> None:
@@ -77,16 +98,25 @@ class ProcessAttempt:
         language = practice.practice_language if practice else "en"
 
         self._save(attempt, AttemptStatus.TRANSCRIBING)
-        data = self.audio.read(attempt.audio_blob)
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "audio.wav"
-            self.converter.to_wav16k(data, PurePath(attempt.audio_blob).suffix, wav)
+            with self.telemetry.span("convert"):
+                data = self.audio.read(attempt.audio_blob)
+                self.converter.to_wav16k(data, PurePath(attempt.audio_blob).suffix, wav)
             # Las dos transcripciones son independientes: en paralelo, Speech marca el ritmo.
-            with ThreadPoolExecutor(max_workers=2) as pool:
+            with (
+                self.telemetry.span("transcribe"),
+                ThreadPoolExecutor(max_workers=2) as pool,
+            ):
                 transcript_future = pool.submit(self.transcriber.transcribe, wav, language)
                 recognition_future = pool.submit(self.recognizer.recognize, wav, language)
                 transcript = transcript_future.result()
-                verbatim = recognition_future.result().verbatim
+                recognition = recognition_future.result()
+                self.telemetry.annotate(**{"transcribe.model": transcript.model})
+                self.telemetry.annotate(**{"speech.paid": recognition.paid})
+            verbatim = recognition.verbatim
+            # Segundos de audio que procesó un recurso de pago, sumando las pasadas de Speech.
+            speech_paid_sec = attempt.duration_sec if recognition.paid else 0.0
             attempt.transcript = transcript.text
             attempt.verbatim_transcript = verbatim.lexical
 
@@ -96,8 +126,12 @@ class ProcessAttempt:
             pronunciation = None
             if attempt.assess_pronunciation:
                 self._save(attempt, AttemptStatus.ASSESSING)
-                assessed = self.recognizer.recognize(wav, language, assess_pronunciation=True)
+                with self.telemetry.span("assess_pronunciation"):
+                    assessed = self.recognizer.recognize(wav, language, assess_pronunciation=True)
+                    self.telemetry.annotate(**{"speech.paid": assessed.paid})
                 pronunciation = assessed.pronunciation
+                if assessed.paid:
+                    speech_paid_sec += attempt.duration_sec
                 if pronunciation is not None:
                     # Solo palabras que el texto de registro confirma: lo que Speech reconoció
                     # mal no es un error de pronunciación del usuario.
@@ -111,18 +145,31 @@ class ProcessAttempt:
         self._save(attempt, AttemptStatus.ANALYZING)
 
         previous = self._previous(attempt)
-        analysis = self.analyzer.analyze(
-            AnalysisRequest(
-                transcript=transcript.text,
-                context=practice.context if practice else None,
-                feedback_language=user.feedback_language if user else "es",
-                practice_language=language,
-                verbatim=verbatim.lexical,
-                candidates=tuple(disfluency_candidates(transcript.text, verbatim.lexical)),
-                previous_transcript=previous.transcript if previous else None,
-                previous_analysis=previous.analysis if previous else None,
-            )
+        request = AnalysisRequest(
+            transcript=transcript.text,
+            context=practice.context if practice else None,
+            feedback_language=user.feedback_language if user else "es",
+            practice_language=language,
+            verbatim=verbatim.lexical,
+            candidates=tuple(disfluency_candidates(transcript.text, verbatim.lexical)),
+            previous_transcript=previous.transcript if previous else None,
+            previous_analysis=previous.analysis if previous else None,
         )
+        with self.telemetry.span(
+            "analyze",
+            **{
+                "llm.model": self.analyzer.model,
+                "llm.prompt_version": self.analyzer.prompt_version,
+            },
+        ):
+            result = self.analyzer.analyze(request)
+            self.telemetry.annotate(
+                **{
+                    "llm.input_tokens": result.input_tokens,
+                    "llm.output_tokens": result.output_tokens,
+                }
+            )
+        analysis = result.analysis
         # Las hesitaciones las cuenta Python sobre la forma léxica; del LLM solo se toman
         # reinicios y muletillas léxicas (ADR 0002).
         analysis.fillers = combine_fillers(verbatim.lexical, analysis.fillers)
@@ -140,6 +187,15 @@ class ProcessAttempt:
             transcribe=transcript.model,
             llm=self.analyzer.model,
             prompt_version=self.analyzer.prompt_version,
+        )
+        attempt.cost_estimate_usd = estimate(
+            Usage(
+                transcribe_sec=attempt.duration_sec,
+                llm_input_tokens=result.input_tokens,
+                llm_output_tokens=result.output_tokens,
+                speech_paid_sec=speech_paid_sec,
+            ),
+            self.prices,
         )
         self._save(attempt, AttemptStatus.DONE)
 

@@ -127,6 +127,7 @@ module developerRoles 'modules/roles.bicep' = {
     openaiAccountName: openai.outputs.name
     cosmosAccountName: cosmos.outputs.name
     storageAccountName: storage.outputs.name
+    appInsightsName: monitoring.outputs.appInsightsName
   }
 }
 
@@ -156,6 +157,10 @@ module apps 'modules/containerapps.bicep' = if (deployApps) {
       { name: 'AZURE_COSMOS_DATABASE', value: cosmos.outputs.databaseName }
       { name: 'AZURE_STORAGE_BLOB_ENDPOINT', value: storage.outputs.blobEndpoint }
       { name: 'AZURE_STORAGE_QUEUE_ENDPOINT', value: storage.outputs.queueEndpoint }
+      {
+        name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+        value: monitoring.outputs.appInsightsConnectionString
+      }
     ]
   }
 }
@@ -170,6 +175,7 @@ module appRoles 'modules/roles.bicep' = if (deployApps) {
     openaiAccountName: openai.outputs.name
     cosmosAccountName: cosmos.outputs.name
     storageAccountName: storage.outputs.name
+    appInsightsName: monitoring.outputs.appInsightsName
   }
 }
 
@@ -210,6 +216,7 @@ resource budget 'Microsoft.Consumption/budgets@2023-11-01' = {
 
 output resourceGroupName string = rg.name
 output logAnalyticsWorkspaceId string = monitoring.outputs.id
+output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
 output speechResourceId string = speech.outputs.id
 output speechEndpoint string = speech.outputs.endpoint
 output speechRegion string = location

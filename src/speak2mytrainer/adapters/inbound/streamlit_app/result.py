@@ -141,6 +141,7 @@ def _listen(ctx: WebContext, attempt: Attempt) -> None:
                 ctx.container.synthesizer,
                 user,
                 attempt.id,
+                ctx.container.prices,
             )
         except DomainError as exc:
             st.error(str(exc))

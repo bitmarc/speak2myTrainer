@@ -6,6 +6,8 @@ Cada puerto tiene un adaptador de Azure en `adapters/outbound/` y un fake en
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -32,6 +34,20 @@ class Transcript:
 class RecognitionResult:
     verbatim: VerbatimTranscript
     pronunciation: PronunciationAssessment | None = None
+    paid: bool = False  # la atendió un recurso de pago (S0), para el costo estimado
+
+
+@dataclass(frozen=True)
+class AnalysisResult:
+    analysis: TextAnalysis
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@dataclass(frozen=True)
+class Synthesis:
+    audio: bytes  # mp3
+    paid: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,13 +108,13 @@ class TextAnalyzer(Protocol):
     @property
     def prompt_version(self) -> str: ...
 
-    def analyze(self, request: AnalysisRequest) -> TextAnalysis: ...
+    def analyze(self, request: AnalysisRequest) -> AnalysisResult: ...
 
 
 class SpeechSynthesizer(Protocol):
     """Texto a audio mp3 con voz neural, en el idioma practicado."""
 
-    def synthesize(self, text: str, language: str, voice: VoiceGender) -> bytes: ...
+    def synthesize(self, text: str, language: str, voice: VoiceGender) -> Synthesis: ...
 
 
 class AudioStorage(Protocol):
@@ -145,3 +161,32 @@ class UserDirectory(Protocol):
 
 class JobQueue(Protocol):
     def enqueue(self, job: AttemptJob) -> None: ...
+
+
+# Valores que admite un atributo de traza (los mismos que OpenTelemetry).
+Attribute = str | int | float | bool
+
+
+class Telemetry(Protocol):
+    """Trazas por intento: cuánto tarda cada paso y cuánto cuesta (ADR 0005).
+
+    Los atributos nunca llevan datos personales (correo, texto del usuario): solo ids,
+    duraciones, conteos y costos.
+    """
+
+    def span(self, name: str, **attributes: Attribute) -> AbstractContextManager[None]: ...
+
+    def annotate(self, **attributes: Attribute) -> None:
+        """Agrega atributos al tramo activo."""
+        ...
+
+
+class NullTelemetry:
+    """Sin telemetría: la usan los tests y el modo local."""
+
+    @contextmanager
+    def span(self, name: str, **attributes: Attribute) -> Iterator[None]:
+        yield
+
+    def annotate(self, **attributes: Attribute) -> None:
+        pass

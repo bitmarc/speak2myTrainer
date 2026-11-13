@@ -10,8 +10,7 @@ from pathlib import Path
 from openai import AzureOpenAI
 
 from speak2mytrainer.adapters.outbound.azure_openai.schema import AnalysisOutput
-from speak2mytrainer.application.ports import AnalysisRequest
-from speak2mytrainer.domain.models import TextAnalysis
+from speak2mytrainer.application.ports import AnalysisRequest, AnalysisResult
 
 PROMPT_VERSION = "v2"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -49,7 +48,7 @@ class AzureOpenAITextAnalyzer:
     def prompt_version(self) -> str:
         return self._prompt_version
 
-    def analyze(self, request: AnalysisRequest) -> TextAnalysis:
+    def analyze(self, request: AnalysisRequest) -> AnalysisResult:
         language = _LANGUAGE_NAMES.get(request.feedback_language, request.feedback_language)
         system = _system_prompt(self._prompt_version).replace("{feedback_language}", language)
 
@@ -83,4 +82,9 @@ class AzureOpenAITextAnalyzer:
         message = completion.choices[0].message
         if message.parsed is None:
             raise RuntimeError(f"El modelo no devolvió un análisis válido: {message.refusal}")
-        return message.parsed.to_domain(request.transcript, request.verbatim, has_previous)
+        usage = completion.usage
+        return AnalysisResult(
+            analysis=message.parsed.to_domain(request.transcript, request.verbatim, has_previous),
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+        )

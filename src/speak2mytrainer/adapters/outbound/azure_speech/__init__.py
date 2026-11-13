@@ -22,7 +22,7 @@ from typing import Any, TypeVar
 import azure.cognitiveservices.speech as speechsdk
 from azure.core.credentials import TokenCredential
 
-from speak2mytrainer.application.ports import RecognitionResult
+from speak2mytrainer.application.ports import RecognitionResult, Synthesis
 from speak2mytrainer.domain.errors import ServiceQuotaError
 from speak2mytrainer.domain.models import (
     PronunciationAssessment,
@@ -47,6 +47,7 @@ _T = TypeVar("_T")
 class SpeechResource:
     resource_id: str
     region: str
+    paid: bool = False  # S0: cada pasada se cobra (F0 es gratis dentro de su cuota)
 
 
 class _Failover:
@@ -59,7 +60,8 @@ class _Failover:
         self._resources = list(resources)
         self._skip_until = [0.0] * len(self._resources)
 
-    def run(self, call: Callable[[SpeechResource], _T]) -> _T:
+    def run(self, call: Callable[[SpeechResource], _T]) -> tuple[_T, SpeechResource]:
+        """Devuelve el resultado y el recurso que lo atendió (para el costo estimado)."""
         now = time.monotonic()
         order = [i for i in range(len(self._resources)) if self._skip_until[i] <= now]
         # Si todos están en pausa, se intenta igual con todos: quizá ya se recuperaron.
@@ -76,7 +78,7 @@ class _Failover:
                 continue
             if i != 0:
                 _log.warning("Speech respondió con el recurso de respaldo %s", _name(resource))
-            return result
+            return result, resource
         assert error is not None
         raise error
 
@@ -125,10 +127,11 @@ class AzureSpeechRecognizer:
                 _assessment_config(locale).apply_to(recognizer)
             return _run_continuous(recognizer, timeout_sec=_timeout(wav_path))
 
-        segments = self._failover.run(attempt)
+        segments, resource = self._failover.run(attempt)
         return RecognitionResult(
             verbatim=_verbatim(segments),
             pronunciation=_pronunciation(segments) if assess_pronunciation else None,
+            paid=resource.paid,
         )
 
 
@@ -145,7 +148,7 @@ class AzureSpeechSynthesizer:
         self._failover = _Failover(resources)
         self._voices = dict(voices)
 
-    def synthesize(self, text: str, language: str, voice: VoiceGender) -> bytes:
+    def synthesize(self, text: str, language: str, voice: VoiceGender) -> Synthesis:
         # Las dos voces configuradas son de inglés de EE. UU., el único idioma practicado.
         def attempt(resource: SpeechResource) -> bytes:
             config = speech_config(self._credential, resource)
@@ -165,7 +168,8 @@ class AzureSpeechSynthesizer:
                 )
             raise RuntimeError(f"Speech no sintetizó el audio: {code}: {message}")
 
-        return self._failover.run(attempt)
+        audio, resource = self._failover.run(attempt)
+        return Synthesis(audio=audio, paid=resource.paid)
 
 
 def _assessment_config(locale: str) -> speechsdk.PronunciationAssessmentConfig:

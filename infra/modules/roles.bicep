@@ -10,12 +10,14 @@ param speechFallbackAccountName string
 param openaiAccountName string
 param cosmosAccountName string
 param storageAccountName string
+param appInsightsName string
 
 var roleIds = {
   cognitiveServicesSpeechUser: 'f2dc8367-1007-4938-bd23-fe263f013447'
   cognitiveServicesOpenAIUser: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
   storageBlobDataContributor: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
   storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+  monitoringMetricsPublisher: '3913510d-42f4-4e42-8a64-420c390055eb'
 }
 
 // Rol integrado de Cosmos DB: "Cosmos DB Built-in Data Contributor".
@@ -39,6 +41,24 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: appInsightsName
+}
+
+// Ingesta de telemetría con Entra (App Insights no acepta la llave de instrumentación).
+resource telemetryPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: appInsights
+  name: guid(appInsights.id, principalId, roleIds.monitoringMetricsPublisher)
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      roleIds.monitoringMetricsPublisher
+    )
+  }
 }
 
 resource speechUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

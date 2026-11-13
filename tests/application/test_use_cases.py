@@ -394,6 +394,63 @@ def test_improved_audio_is_generated_once_per_voice(world: World, tmp_path: Path
     assert not [f for f in tmp_path.rglob("*.mp3")]
 
 
+def test_cost_estimate_counts_only_paid_speech(world: World) -> None:
+    # Audio de 60 s: transcripción 0.003 + LLM (5k + 2.5k tokens) 0.006; Speech en F0 gratis.
+    attempt = world.process(_submitted(world), final=False)
+    assert attempt is not None
+    assert attempt.cost_estimate_usd == pytest.approx(0.009)
+
+    # Si respondió el S0, cada pasada cobra 1 USD/h: con pronunciación son dos.
+    world.recognizer.paid = True
+    job = world.submit(USER, attempt.practice_id, b"wav", "a.wav", assess_pronunciation=True)
+    paid = world.process(AttemptJob(USER, attempt.practice_id, job.id), final=False)
+    assert paid is not None
+    assert paid.cost_estimate_usd == pytest.approx(0.009 + 2 * 60 / 3600, abs=1e-6)
+
+
+def test_process_traces_each_step_without_personal_data(tmp_path: Path) -> None:
+    world = World(tmp_path)
+    telemetry = fakes.RecordingTelemetry()
+    process = ProcessAttempt(
+        world.practices,
+        world.users,
+        world.audio,
+        world.converter,
+        world.transcriber,
+        world.recognizer,
+        world.analyzer,
+        telemetry=telemetry,
+    )
+    practice = practices.create_practice(world.practices, USER, "Entrevista", None)
+    world.submit(USER, practice.id, b"audio", "a.wav", assess_pronunciation=True)
+    attempt = process(world.queue.jobs.popleft(), final=False)
+    assert attempt is not None
+
+    names = [name for name, _ in telemetry.spans]
+    assert names == ["process_attempt", "convert", "transcribe", "assess_pronunciation", "analyze"]
+    root = telemetry.spans[0][1]
+    assert root["attempt.id"] == attempt.id
+    assert root["attempt.status"] == "done"
+    assert root["cost.usd"] == attempt.cost_estimate_usd
+    assert telemetry.spans[-1][1]["llm.input_tokens"] == 5_000
+    # Ningún atributo lleva el correo ni el texto del usuario.
+    values = [str(v) for _, attrs in telemetry.spans for v in attrs.values()]
+    assert not any(USER in v or "worked on" in v for v in values)
+
+
+def test_improved_audio_adds_the_tts_cost(world: World) -> None:
+    attempt = world.process(_submitted(world), final=False)
+    assert attempt is not None
+    user = world.users.get(USER)
+    assert user is not None
+    synthesizer = fakes.FakeSpeechSynthesizer(paid=True)
+    practices.improved_audio(world.practices, world.audio, synthesizer, user, attempt.id)
+    saved = world.practices.get_attempt(USER, attempt.id)
+    assert saved is not None
+    chars = len("Well, I once worked on a project.")
+    assert saved.cost_estimate_usd == pytest.approx(0.009 + chars * 15 / 1_000_000, abs=1e-6)
+
+
 def test_improved_audio_needs_a_finished_attempt(world: World) -> None:
     job = _submitted(world)
     user = world.users.get(USER)

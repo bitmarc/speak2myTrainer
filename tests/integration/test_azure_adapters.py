@@ -124,7 +124,7 @@ def test_speech_synthesizer_returns_mp3(  # type: ignore[no-untyped-def]
             VoiceGender.MALE: azure.azure_tts_voice_male,
         },
     )
-    data = synthesizer.synthesize("We built it in two weeks.", "en", VoiceGender(voice))
+    data = synthesizer.synthesize("We built it in two weeks.", "en", VoiceGender(voice)).audio
     assert len(data) > 2000
     assert data[:3] == b"ID3" or data[0] == 0xFF  # cabecera ID3 o marco MPEG
 

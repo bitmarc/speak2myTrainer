@@ -9,6 +9,7 @@ from speak2mytrainer.application.ports import (
     PracticeRepository,
     SpeechSynthesizer,
 )
+from speak2mytrainer.domain.cost import Prices, Usage, estimate
 from speak2mytrainer.domain.errors import NotFoundError
 from speak2mytrainer.domain.models import Attempt, AttemptStatus, Practice, UserProfile
 
@@ -80,6 +81,7 @@ def improved_audio(
     synthesizer: SpeechSynthesizer,
     user: UserProfile,
     attempt_id: str,
+    prices: Prices | None = None,
 ) -> str:
     """Ruta en Blob del mp3 de la versión mejorada con la voz del usuario (RF-16).
 
@@ -96,8 +98,14 @@ def improved_audio(
         return path
     practice = practices.get_practice(user.id, attempt.practice_id)
     language = practice.practice_language if practice else "en"
-    data = synthesizer.synthesize(attempt.analysis.improved_version, language, user.tts_voice)
-    audio.save(path, data, "audio/mpeg")
+    text = attempt.analysis.improved_version
+    synthesis = synthesizer.synthesize(text, language, user.tts_voice)
+    audio.save(path, synthesis.audio, "audio/mpeg")
     attempt.tts_blob = path
+    # El TTS se suma al costo del intento: así el gasto del mes lo incluye.
+    tts_cost = estimate(
+        Usage(tts_paid_chars=len(text) if synthesis.paid else 0), prices or Prices()
+    )
+    attempt.cost_estimate_usd = round((attempt.cost_estimate_usd or 0.0) + tts_cost, 6)
     practices.update_attempt(attempt)
     return path

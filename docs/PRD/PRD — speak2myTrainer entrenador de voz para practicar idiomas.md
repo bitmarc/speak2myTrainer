@@ -102,7 +102,7 @@ El criterio de calidad número uno es cero falsos positivos: la herramienta pier
 | Aspecto | Objetivo |
 | --- | --- |
 | Duración de audio | 10 s a 10 min |
-| Tiempo de análisis | \~0.5× la duración del audio más el arranque del job (\~3 min para 5 min de audio). Decidido el 12-nov-2026: Speech F0 procesa a ese ritmo con una sola solicitud a la vez (ADR 0002). Medido el 13-nov-2026 desde el envío hasta ver el resultado: audio de 1 min en \~1:15; dos audios de 1:16 enviados a la vez por dos usuarios, 1:30 y 2:18 (el job procesa uno por uno, así que el segundo espera en la cola) |
+| Tiempo de análisis | \~0.5× la duración del audio más el arranque del job (\~3 min para 5 min de audio). Decidido el 12-nov-2026: Speech F0 procesa a ese ritmo con una sola solicitud a la vez (ADR 0002). Medido el 13-nov-2026 desde el envío hasta ver el resultado: audio de 1 min en \~1:15; dos audios de 1:16 enviados a la vez por dos usuarios, 1:30 y 2:18 (el job procesa uno por uno, así que el segundo espera en la cola). Con pronunciación (opcional, segunda pasada de Speech; ADR 0003) tarda \~1× la duración del audio: medido el 13-nov-2026 en Azure, 117 s de audio en 157 s (41 s de arranque del job); sin pronunciación, 113 s en 127 s |
 | Disponibilidad | Mejor esfuerzo; escalado a cero |
 | Costo | ≤ 15 USD/mes total, con alertas de presupuesto en Azure al 50%, 80% y 100% |
 | Seguridad | HTTPS, login Google, lista blanca, secretos en Key Vault o variables seguras, identidad administrada hacia los servicios de Azure |
@@ -236,16 +236,16 @@ Tres contenedores de Cosmos DB particionados por `userId`, de modo que cada cons
 
 | Contenedor | Documento | Campos clave |
 | --- | --- | --- |
-| `users` | Uno por usuario | `id` (correo), `name`, `role` (admin, user), `allowed`, `feedbackLanguage` (`es` por defecto), `practiceLanguage` (`en`), `quota` { `minutesPerMonth`, `usedThisMonth`, `periodStart` } |
+| `users` | Uno por usuario | `id` (correo), `name`, `role` (admin, user), `allowed`, `feedbackLanguage` (`es` por defecto), `practiceLanguage` (`en`), `ttsVoice` (`female` o `male`), `quota` { `minutesPerMonth`, `usedThisMonth`, `periodStart` } |
 | `practices` | Una práctica agrupa intentos | `id`, `userId`, `title`, `context` (texto opcional), `practiceLanguage`, `createdAt`, `attemptCount`, `lastAttemptAt` |
-| `attempts` | Un intento analizado | `id`, `userId`, `practiceId`, `number`, `audioBlob`, `durationSec`, `status`, `transcript`, `metrics` { `words`, `wpm`, `fillersPerMin`, `restarts`, `pronScore`, `accuracy`, `fluency`, `prosody` }, `fillers[]`, `validNonFillers[]`, `grammar[]`, `pronunciation[]`, `improvedVersion`, `ttsBlob`, `nextSteps[]`, `comparison` (nulo en el intento 1), `models` { `transcribe`, `llm`, `promptVersion` }, `costEstimateUsd`, `createdAt` |
+| `attempts` | Un intento analizado | `id`, `userId`, `practiceId`, `number`, `audioBlob`, `durationSec`, `assessPronunciation`, `status`, `transcript`, `metrics` { `words`, `wpm`, `fillersPerMin`, `restarts`, `pronScore`, `accuracy`, `fluency`, `prosody` }, `fillers[]`, `validNonFillers[]`, `grammar[]`, `pronunciation` { puntajes, `issues[]` }, `improvedVersion`, `ttsBlob`, `nextSteps[]`, `comparison` (nulo en el intento 1), `models` { `transcribe`, `llm`, `promptVersion` }, `costEstimateUsd`, `createdAt` |
 
 Decisiones del modelo:
 
 - Un intento descartado con **Reintentar** nunca llega a Cosmos ni a Blob.
 - `status` recorre `queued → transcribing → assessing → analyzing → done`, o `failed` con `error`; la UI lo consulta cada pocos segundos.
 - `models.promptVersion` permite comparar resultados de distintos prompts y modelos al reevaluar.
-- Rutas en Blob: `audio/{userId}/{practiceId}/{attemptId}.wav` y `tts/{userId}/{attemptId}.mp3`.
+- Rutas en Blob: `audio/{userId}/{practiceId}/{attemptId}.{ext}` y `tts/{userId}/{practiceId}/{attemptId}-{voz}.mp3`, para que borrar una práctica borre también su TTS.
 - Borrar historial elimina los documentos de la partición del usuario y su prefijo en Blob.
 
 ## Estimación de costos
@@ -254,7 +254,7 @@ Con uso esperado (unos 10 usuarios y 10 horas de audio al mes) el costo ronda 8 
 
 | Concepto | Personal (5 h de audio/mes) | Esperado (10 h/mes) | Supuesto |
 | --- | --- | --- | --- |
-| Azure AI Speech, evaluación de pronunciación | 0 USD | \~5 USD | 5 h gratis en F0; excedente en S0 a \~1 USD/h (confirmar en la calculadora de Azure) |
+| Azure AI Speech, reconocimiento y pronunciación | 0 USD | \~5 USD | 5 h gratis en F0; excedente en S0 a 1 USD/h por pasada (precio confirmado el 13-nov-2026). Un intento con pronunciación usa dos pasadas |
 | Transcripción `gpt-4o-mini-transcribe` | \~0.90 USD | \~1.80 USD | \~0.003 USD/min |
 | LLM `gpt-4.1-mini` | \~0.40 USD | \~0.75 USD | \~5k tokens de entrada y \~2.5k de salida por análisis (\~0.006 USD) |
 | Azure TTS, Container Apps, Cosmos DB, logs | 0 USD | 0 USD | Dentro de cuotas gratuitas: 0.5 M caracteres, 180 mil vCPU-s, 1,000 RU/s, 5 GB |
@@ -263,7 +263,7 @@ Con uso esperado (unos 10 usuarios y 10 horas de audio al mes) el costo ronda 8 
 
 Controles de gasto:
 
-- **Dos recursos de Speech:** uno F0 como primario y uno S0 que solo se usa cuando el F0 agota sus 5 horas (el F0 rechaza solicitudes al llegar al límite; no se puede mezclar en un mismo recurso).
+- **Dos recursos de Speech:** uno F0 como primario y uno S0 que solo se usa cuando el F0 rechaza por cuota agotada o por concurrencia (el F0 rechaza solicitudes al llegar al límite; no se puede mezclar en un mismo recurso). Desplegados desde la Fase 2.
 - **Cuota por usuario:** 60 minutos de audio al mes por defecto, editable por el admin. Con 10 usuarios al tope, el gasto llega a \~8 USD.
 - **Presupuesto de Azure** con alertas por correo al 50%, 80% y 100% de 15 USD.
 - **Evitar costos fijos:** sin ACR (se usa GHCR), sin App Service, sin réplicas mínimas, Cosmos en nivel gratuito (no serverless).
@@ -300,12 +300,13 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 
 ### Fase 2 · Pronunciación y repetición
 
-- [ ] Evaluación de pronunciación en el job con failover de F0 a S0
-- [ ] Bloque de pronunciación en el resultado y puntajes en las métricas
-- [ ] Repetir sobre la misma práctica y comparación con el intento anterior
-- [ ] TTS de la versión mejorada en caché y botón para ocultar o difuminar
-- [ ] Set de evaluación a 50 frases, ejecutado en CI cuando cambian prompts o modelos
-- [ ] Recall de errores ≥ 90% en el set de prueba: prompt v2 ajustado solo con casos nuevos de desarrollo (comparativos mal formados, artículo con sustantivos incontables, citar solo el texto de registro), y medir varias corridas por la variación del LLM
+- [x] Evaluación de pronunciación en el job con failover de F0 a S0. Es opcional por intento y va en una segunda pasada, porque la pasada única perdía el 62% de las hesitaciones (ADR 0003)
+- [x] Bloque de pronunciación en el resultado y puntajes en las métricas, con las palabras filtradas por alineación
+- [x] Repetir sobre la misma práctica y comparación con el intento anterior (deltas de métricas calculados en Python)
+- [x] TTS de la versión mejorada en caché (al primer clic, con voz elegida en Preferencias) y versión mejorada difuminada mientras se graba un intento nuevo
+- [x] Set de evaluación a 50 frases (40 de desarrollo y 10 de prueba), ejecutado en CI con 2 corridas cuando cambian prompts o modelos
+- [ ] Recall ≥ 90% en el set de prueba. Con el prompt v2, el set de desarrollo cumple la meta (0 FP, muletillas 90%, errores 100%, comparación sin fallos). El de prueba, medido una vez sin ajustar, tiene 0 FP, muletillas 89% y errores 75%. Lo que falla: el LLM cita la gramática desde el texto léxico y la validación la descarta, más dos reinicios que no son repeticiones exactas
+- [ ] Puerta: Marco repite una práctica desde el celular con pronunciación, escucha la versión mejorada y prueba el difuminado
 
 ### Fase 3 · Pulido para portafolio
 
@@ -343,7 +344,7 @@ Decisiones pendientes:
 - [x] Confirmar Streamlit frente a NiceGUI después del spike de grabación en móvil: **Streamlit** (ADR 0004).
 - [x] Elegir entre evaluación de pronunciación no guionizada directa, o transcribir primero y evaluar en modo guionizado con ese texto: **no guionizada, filtrada por alineación con la transcripción** (ADR 0003).
 - [x] Motor de transcripción: **híbrido**, `gpt-4o-mini-transcribe` como texto de registro y Speech léxico como evidencia de muletillas (ADR 0002).
-- [ ] Confirmar el precio S0 de Speech para la región elegida.
+- [x] Confirmar el precio S0 de Speech para la región elegida: **1 USD por hora de STT estándar y 15 USD por millón de caracteres de TTS neural** en East US 2 (API pública de precios, 13-nov-2026).
 - [x] Definir la región de Azure con todos los servicios disponibles (Speech con evaluación de pronunciación y prosodia, Azure OpenAI con los modelos elegidos): **East US 2**.
 - [ ] Nombre público y dominio del proyecto para el portafolio.
 

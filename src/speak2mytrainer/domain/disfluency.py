@@ -101,12 +101,16 @@ def _filler_key(token: str) -> str:
 def combine_fillers(lexical: str, llm_fillers: list[Filler]) -> list[Filler]:
     """Hesitaciones y repeticiones de Python más los reinicios y muletillas léxicas del LLM.
 
-    Si el LLM también reporta una repetición que Python ya contó, se descarta la del LLM.
+    Si el LLM también reporta una repetición que Python ya contó, se descarta la del LLM. Las
+    hesitaciones las cuenta solo Python, aunque el LLM las reporte con otro tipo.
     """
     found = hesitations(lexical) + repetitions(lexical)
     pending = Counter(_filler_key(f.token) for f in found if f.type is FillerType.RESTART)
     for filler in llm_fillers:
-        if filler.type is FillerType.HESITATION:
+        tokens = tokenize(filler.token)
+        if filler.type is FillerType.HESITATION or (
+            tokens and all(HESITATION_RE.match(t) for t in tokens)
+        ):
             continue
         key = _filler_key(filler.token)
         if pending[key] > 0:

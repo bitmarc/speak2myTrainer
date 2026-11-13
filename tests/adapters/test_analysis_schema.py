@@ -88,6 +88,9 @@ def test_comparison_only_with_previous_attempt() -> None:
     analysis = output.to_domain(TRANSCRIPT, has_previous=True)
     assert analysis.comparison is not None
     assert analysis.comparison.fixed == ["in"]
+    # Si el modelo no compara aunque haya intento previo, la comparación queda vacía.
+    empty = make_output(comparison=None).to_domain(TRANSCRIPT, has_previous=True).comparison
+    assert empty is not None and empty.fixed == empty.regressed == []
 
 
 RECORD = "The principal challenge was to make the agent follow the rules. We solved it."

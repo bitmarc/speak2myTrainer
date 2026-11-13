@@ -16,6 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from speak2mytrainer.domain.grammar import is_disfluency_fix, soften_colloquial
 from speak2mytrainer.domain.models import (
     Comparison,
     Filler,
@@ -85,12 +86,17 @@ class AnalysisOutput(_Strict):
 
         # Sin intento previo no hay nada que comparar, aunque el modelo invente algo. Los conteos
         # de muletillas los completa el caso de uso con las muletillas ya combinadas.
+        # Con intento previo siempre hay comparación: si el modelo devuelve null (nada cambió),
+        # queda vacía y la interfaz igual muestra el antes y después de las muletillas.
         comparison = None
-        if self.comparison is not None and has_previous:
+        if has_previous:
+            source = self.comparison or ComparisonOut(
+                fixed=[], regressed=[], adopted_suggestions=[]
+            )
             comparison = Comparison(
-                fixed=self.comparison.fixed,
-                regressed=self.comparison.regressed,
-                adopted_suggestions=self.comparison.adopted_suggestions,
+                fixed=source.fixed,
+                regressed=source.regressed,
+                adopted_suggestions=source.adopted_suggestions,
             )
 
         # Si el modelo puso la misma ocurrencia en ambas listas, gana "uso válido": ante la duda,
@@ -102,6 +108,15 @@ class AnalysisOutput(_Strict):
             if grounded(f.quote, f.token)
             and (_normalize(f.quote), _normalize(f.token)) not in valid_keys
         ]
+        grammar = [
+            GrammarIssue(quote=g.quote, fix=g.fix, why=g.why, severity=Severity(g.severity))
+            for g in self.grammar
+            if grounded(g.quote, sources=(record,))
+        ]
+        # Las muletillas ya tienen su bloque: una "corrección" que solo las quita no es
+        # gramática. Lo prescriptivo baja a Sugerencia (domain/grammar.py).
+        grammar = soften_colloquial([g for g in grammar if not is_disfluency_fix(g)])
+
         return TextAnalysis(
             fillers=fillers,
             valid_non_fillers=[
@@ -109,11 +124,7 @@ class AnalysisOutput(_Strict):
                 for v in self.valid_non_fillers
                 if grounded(v.quote, v.token)
             ],
-            grammar=[
-                GrammarIssue(quote=g.quote, fix=g.fix, why=g.why, severity=Severity(g.severity))
-                for g in self.grammar
-                if grounded(g.quote, sources=(record,))
-            ],
+            grammar=grammar,
             improved_version=self.improved_version,
             # El formato del PRD pide exactamente tres; el modelo a veces da más.
             next_steps=self.next_steps[:MAX_NEXT_STEPS],

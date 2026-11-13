@@ -10,7 +10,12 @@ salen de alinear ambos y las hesitaciones las cuenta Python.
 Los casos con `split: test` (fragmentos reales) no se usan para ajustar el prompt: se reportan
 aparte para detectar sobreajuste.
 
-Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--only id] [--split dev|test]
+El LLM varía entre corridas aunque la temperatura sea 0. Con `--runs N` cada caso se evalúa N
+veces: la meta exige 0 falsos positivos en TODAS las corridas, recall promedio ≥ 90% y que la
+comparación (casos con `previous`) acierte siempre.
+
+Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--runs N] [--only id]
+                                                   [--split dev|test] [--prompt v1|v2]
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ from speak2mytrainer.adapters.outbound.azure_openai.analyzer import (
 )
 from speak2mytrainer.application.ports import AnalysisRequest
 from speak2mytrainer.domain.disfluency import combine_fillers, disfluency_candidates
-from speak2mytrainer.domain.models import Severity, TextAnalysis
+from speak2mytrainer.domain.models import GrammarIssue, Severity, TextAnalysis
 
 ROOT = Path(__file__).resolve().parent.parent
 PHRASES = ROOT / "evals" / "phrases.yaml"
@@ -92,11 +97,40 @@ def score_errors(case: dict[str, Any], analysis: TextAnalysis, score: Score) -> 
     score.fn += len(expected) - len(found)
 
 
+def previous_attempt(case: dict[str, Any]) -> tuple[str | None, TextAnalysis | None]:
+    previous = case.get("previous")
+    if not previous:
+        return None, None
+    grammar = [
+        GrammarIssue(quote=g["quote"], fix=g["fix"], why=g.get("why", ""), severity=g["severity"])
+        for g in previous.get("grammar", [])
+    ]
+    return previous["text"], TextAnalysis(grammar=grammar, improved_version="")
+
+
+def score_comparison(case: dict[str, Any], analysis: TextAnalysis, failures: list[str]) -> None:
+    """Solo booleanos: si `fixed` y `regressed` traen algo cuando deben (el texto es libre)."""
+    if "previous" not in case:
+        return
+    comparison = analysis.comparison
+    if comparison is None:
+        failures.append(f"{case['id']}: sin comparación")
+        return
+    for name in ("fixed", "regressed"):
+        expected = case.get(f"expect_{name}", False)
+        got = getattr(comparison, name)
+        if bool(got) != expected:
+            wanted = "algo" if expected else "nada"
+            failures.append(f"{case['id']}: {name}={got} (se esperaba {wanted})")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--strict", action="store_true", help="Exit 1 si no se cumple la meta")
     parser.add_argument("--only", help="Evaluar solo el caso con este id")
     parser.add_argument("--split", choices=["dev", "test"], help="Evaluar solo ese subconjunto")
+    parser.add_argument("--runs", type=int, default=1, help="Corridas por caso (variación)")
+    parser.add_argument("--prompt", default=PROMPT_VERSION, help="Versión del prompt")
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env")
@@ -106,6 +140,7 @@ def main() -> int:
         token_provider=get_bearer_token_provider(
             DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
         ),
+        prompt_version=args.prompt,
     )
 
     cases = yaml.safe_load(PHRASES.read_text(encoding="utf-8"))
@@ -114,45 +149,71 @@ def main() -> int:
     if args.split:
         cases = [c for c in cases if c.get("split", "dev") == args.split]
 
-    scores = {split: (Score(), Score()) for split in ("dev", "test")}
+    # Una tupla (muletillas, errores) por split y por corrida.
+    runs: list[dict[str, tuple[Score, Score]]] = []
+    comparison_failures: list[str] = []
     raw: list[dict[str, Any]] = []
-    for case in cases:
-        verbatim = case.get("verbatim", case["text"])
-        analysis = analyzer.analyze(
-            AnalysisRequest(
-                transcript=case["text"],
-                context=case.get("context"),
-                feedback_language="es",
-                practice_language="en",
-                verbatim=verbatim,
-                candidates=tuple(disfluency_candidates(case["text"], verbatim)),
+    for run in range(args.runs):
+        scores = {split: (Score(), Score()) for split in ("dev", "test")}
+        for case in cases:
+            verbatim = case.get("verbatim", case["text"])
+            previous_text, previous_analysis = previous_attempt(case)
+            analysis = analyzer.analyze(
+                AnalysisRequest(
+                    transcript=case["text"],
+                    context=case.get("context"),
+                    feedback_language="es",
+                    practice_language="en",
+                    verbatim=verbatim,
+                    candidates=tuple(disfluency_candidates(case["text"], verbatim)),
+                    previous_transcript=previous_text,
+                    previous_analysis=previous_analysis,
+                )
             )
-        )
-        analysis.fillers = combine_fillers(verbatim, analysis.fillers)
-        fillers, errors = scores[case.get("split", "dev")]
-        score_fillers(case, analysis, fillers)
-        score_errors(case, analysis, errors)
-        raw.append({"id": case["id"], "analysis": analysis.model_dump(mode="json")})
-        print(".", end="", flush=True)
+            analysis.fillers = combine_fillers(verbatim, analysis.fillers)
+            fillers, errors = scores[case.get("split", "dev")]
+            score_fillers(case, analysis, fillers)
+            score_errors(case, analysis, errors)
+            score_comparison(case, analysis, comparison_failures)
+            raw.append({"id": case["id"], "run": run, "analysis": analysis.model_dump(mode="json")})
+            print(".", end="", flush=True)
+        runs.append(scores)
     print()
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{PROMPT_VERSION}_{analyzer.model}.json"
+    out = RESULTS / f"{args.prompt}_{analyzer.model}.json"
     out.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print(f"Prompt {PROMPT_VERSION} · modelo {analyzer.model} · {len(cases)} casos")
+    print(
+        f"Prompt {args.prompt} · modelo {analyzer.model} · {len(cases)} casos · "
+        f"{args.runs} corrida(s)"
+    )
     evaluated = {c.get("split", "dev") for c in cases}
+    passed = True
     for split in ("dev", "test"):
         if split not in evaluated:
             continue
         print(f"[{split}]")
-        for name, s in zip(("Muletillas", "Errores"), scores[split], strict=True):
-            print(f"  {name:<11} recall {s.recall:6.1%}  ({s.tp}/{s.tp + s.fn})  FP {len(s.fp)}")
-            for fp in s.fp:
+        for i, name in enumerate(("Muletillas", "Errores")):
+            per_run = [r[split][i] for r in runs]
+            tp = sum(s.tp for s in per_run)
+            total = sum(s.tp + s.fn for s in per_run)
+            recall = tp / total if total else 1.0
+            fps = [fp for s in per_run for fp in s.fp]
+            worst = max(len(s.fp) for s in per_run)
+            print(
+                f"  {name:<11} recall {recall:6.1%}  ({tp}/{total})  FP {worst} en la peor corrida"
+            )
+            for fp in sorted(set(fps)):
                 print(f"      FP {fp}")
+            passed &= worst == 0 and recall >= 0.9
+    if any("previous" in c for c in cases):
+        print(f"  Comparación  {len(comparison_failures)} fallos")
+        for failure in comparison_failures:
+            print(f"      {failure}")
+        passed &= not comparison_failures
     print(f"Detalle: {out}")
 
-    passed = all(not s.fp and s.recall >= 0.9 for pair in scores.values() for s in pair)
     print("META CUMPLIDA" if passed else "META NO CUMPLIDA")
     return 1 if args.strict and not passed else 0
 

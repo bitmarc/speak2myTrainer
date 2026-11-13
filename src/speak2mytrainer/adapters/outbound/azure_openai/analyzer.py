@@ -13,7 +13,7 @@ from speak2mytrainer.adapters.outbound.azure_openai.schema import AnalysisOutput
 from speak2mytrainer.application.ports import AnalysisRequest
 from speak2mytrainer.domain.models import TextAnalysis
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 _LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}

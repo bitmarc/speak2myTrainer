@@ -70,6 +70,7 @@ def test_combine_fillers_drops_llm_duplicates_of_python_repetitions() -> None:
         Filler(quote="and and you know", token="and and", type=FillerType.RESTART),
         Filler(quote="and and you know", token="you know", type=FillerType.LEXICAL),
         Filler(quote="um so", token="um", type=FillerType.HESITATION),
+        Filler(quote="um so the", token="Um", type=FillerType.LEXICAL),  # mal tipado
     ]
     combined = combine_fillers("um so the implementation and and you know", llm)
     assert [(f.token, f.type) for f in combined] == [

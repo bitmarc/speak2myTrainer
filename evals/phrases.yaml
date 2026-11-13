@@ -8,6 +8,8 @@
 # allow_fillers  tokens que se pueden marcar o no sin penalizar (p. ej., reinicios dudosos).
 # errors         fragmentos que SÍ son error gramatical (severity = error).
 # allow_errors   fragmentos que pueden salir como error sin contar como falso positivo.
+# previous       intento anterior ({text, grammar}) para evaluar la comparación (RF-15), con
+#                expect_fixed / expect_regressed: si esas listas deben traer algo.
 #
 # Métrica (PRD): 0 falsos positivos en muletillas y en Error, recall ≥ 90%.
 # Lo que no está en `errors` puede salir como suggestion o style sin penalizar.
@@ -122,6 +124,127 @@
   text: "Me and my team built the pipeline in two weeks. There's a lot of reasons why it worked."
   fillers: []
   errors: []
+
+# --- Fase 2: errores frecuentes de hispanohablantes (dev) -----------------------------------
+# Escritos para el set de desarrollo; no copian fragmentos del set de prueba.
+
+- id: comparative-more-easy
+  text: "With the new pipeline it was more easy to deploy than with the old scripts."
+  fillers: []
+  errors: ["more easy"]
+
+- id: comparative-more-fast
+  text: "So, basically, the new server is more fast and it costs less."
+  fillers: [basically]
+  allow_fillers: [so]
+  errors: ["more fast"]
+
+- id: uncountable-a-feedback
+  text: "After the demo, my lead gave me a feedback about the error handling."
+  fillers: []
+  errors: ["a feedback"]
+
+- id: uncountable-an-advice
+  text: "Can you give me an advice on how to prepare for the system design round?"
+  fillers: []
+  errors: ["an advice"]
+
+- id: uncountable-informations
+  text: "We collected many informations from the logs before we changed the query."
+  fillers: []
+  errors: ["many informations"]
+
+- id: discuss-about
+  text: "Yesterday we discussed about the deadline with the client and agreed on Friday."
+  fillers: []
+  errors: ["discussed about"]
+
+- id: depends-of
+  text: "The number of replicas depends of the traffic we get during the day."
+  fillers: []
+  errors: ["depends of"]
+
+- id: people-is
+  text: "The people in my team is very friendly, and they always help the new hires."
+  fillers: []
+  errors: ["people in my team is"]
+
+- id: have-years-old
+  text: "I have twenty-eight years and I have been coding since university."
+  fillers: []
+  errors: ["i have twenty-eight years"]
+
+- id: present-since
+  text: "I'm working in this company since 2020, mostly on the payments team."
+  fillers: []
+  errors: ["i'm working in this company since 2020"]
+
+# --- Fase 2: inglés coloquial válido (dev, vigila falsos positivos) -------------------------
+
+- id: less-people
+  text: "Less people came to the workshop than we expected, but it went well."
+  fillers: []
+  errors: []
+
+- id: who-preposition-end
+  text: "Who did you work with on that project? I can't remember who I talked to."
+  fillers: []
+  errors: []
+
+- id: if-i-was-you
+  text: "If I was you, I'd ask for more time before the release."
+  fillers: []
+  errors: []
+
+- id: gotta-ship
+  text: "We gotta ship it by Friday, so we're gonna work late this week."
+  fillers: []
+  errors: []
+
+- id: singular-they
+  text: "Everyone on the team has their own laptop, and nobody shares their keys."
+  fillers: []
+  errors: []
+
+# --- Fase 2: comparación con el intento anterior (dev) --------------------------------------
+# `previous` es el intento anterior con su gramática; se espera que `comparison.fixed` traiga
+# algo cuando el error desapareció y que `regressed` quede vacío si no hay problemas nuevos.
+
+- id: compare-fixed
+  context: "Interview question: Tell me about a project you are proud of."
+  previous:
+    text: "I participated on a project where we build a chatbot for a bank."
+    grammar:
+      - {quote: "participated on", fix: "participated in", severity: error}
+      - {quote: "we build", fix: "we built", severity: error}
+  text: "I participated in a project where we built a chatbot for a bank."
+  fillers: []
+  errors: []
+  expect_fixed: true
+  expect_regressed: false
+
+- id: compare-fixed-and-regressed
+  context: "Interview question: Tell me about a project you are proud of."
+  previous:
+    text: "I participated on a project where we built a chatbot for a bank."
+    grammar:
+      - {quote: "participated on", fix: "participated in", severity: error}
+  text: "I participated in a project where we built a chatbot for a bank, but the client don't use it anymore."
+  fillers: []
+  errors: ["the client don't"]
+  expect_fixed: true
+  expect_regressed: true
+
+- id: compare-unchanged
+  context: "Interview question: Why do you want this job?"
+  previous:
+    text: "I want this job because I like to work with distributed systems."
+    grammar: []
+  text: "I want this job because I like to work with distributed systems."
+  fillers: []
+  errors: []
+  expect_fixed: false
+  expect_regressed: false
 
 # --- Set de prueba: fragmentos reales (split: test) ---------------------------------------
 # Respuestas reales de Marco a preguntas de entrevista (spikes de la Fase 0), sin nombres ni

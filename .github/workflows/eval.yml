@@ -8,12 +8,14 @@ on:
     paths:
       - src/speak2mytrainer/adapters/outbound/azure_openai/**
       - src/speak2mytrainer/domain/disfluency.py
+      - src/speak2mytrainer/domain/grammar.py
       - evals/**
       - .github/workflows/eval.yml
   pull_request:
     paths:
       - src/speak2mytrainer/adapters/outbound/azure_openai/**
       - src/speak2mytrainer/domain/disfluency.py
+      - src/speak2mytrainer/domain/grammar.py
       - evals/**
       - .github/workflows/eval.yml
   workflow_dispatch:
@@ -43,4 +45,4 @@ jobs:
         env:
           AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_LLM_DEPLOYMENT: ${{ vars.AZURE_OPENAI_LLM_DEPLOYMENT }}
-        run: uv run python evals/run_eval.py --strict | tee -a "$GITHUB_STEP_SUMMARY"
+        run: uv run python evals/run_eval.py --strict --runs 2 | tee -a "$GITHUB_STEP_SUMMARY"

@@ -8,11 +8,12 @@ Cada caso reproduce el pipeline del job (ADR 0002): `text` es el texto de regist
 salen de alinear ambos y las hesitaciones las cuenta Python.
 
 Los casos con `split: test` (fragmentos reales) no se usan para ajustar el prompt: se reportan
-aparte para detectar sobreajuste.
+aparte para detectar sobreajuste. Desde el cierre de la Fase 2 su recall es informativo (Marco
+aceptó 75% en errores); sus falsos positivos sí cuentan para la meta.
 
 El LLM varía entre corridas aunque la temperatura sea 0. Con `--runs N` cada caso se evalúa N
-veces: la meta exige 0 falsos positivos en TODAS las corridas, recall promedio ≥ 90% y que la
-comparación (casos con `previous`) acierte siempre.
+veces: la meta exige 0 falsos positivos en TODAS las corridas (los dos splits), recall promedio
+≥ 90% en `dev` y que la comparación (casos con `previous`) acierte siempre.
 
 Uso:  uv run --all-extras python evals/run_eval.py [--strict] [--runs N] [--only id]
                                                    [--split dev|test] [--prompt v1|v2]
@@ -169,7 +170,7 @@ def main() -> int:
                     previous_transcript=previous_text,
                     previous_analysis=previous_analysis,
                 )
-            )
+            ).analysis
             analysis.fillers = combine_fillers(verbatim, analysis.fillers)
             fillers, errors = scores[case.get("split", "dev")]
             score_fillers(case, analysis, fillers)
@@ -201,12 +202,15 @@ def main() -> int:
             recall = tp / total if total else 1.0
             fps = [fp for s in per_run for fp in s.fp]
             worst = max(len(s.fp) for s in per_run)
+            # El recall del set de prueba se reporta, pero no decide la meta.
+            note = "  (informativo)" if split == "test" else ""
             print(
-                f"  {name:<11} recall {recall:6.1%}  ({tp}/{total})  FP {worst} en la peor corrida"
+                f"  {name:<11} recall {recall:6.1%}{note}  ({tp}/{total})  "
+                f"FP {worst} en la peor corrida"
             )
             for fp in sorted(set(fps)):
                 print(f"      FP {fp}")
-            passed &= worst == 0 and recall >= 0.9
+            passed &= worst == 0 and (split == "test" or recall >= 0.9)
     if any("previous" in c for c in cases):
         print(f"  Comparación  {len(comparison_failures)} fallos")
         for failure in comparison_failures:

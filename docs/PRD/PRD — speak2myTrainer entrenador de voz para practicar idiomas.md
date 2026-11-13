@@ -305,8 +305,8 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 - [x] Repetir sobre la misma práctica y comparación con el intento anterior (deltas de métricas calculados en Python)
 - [x] TTS de la versión mejorada en caché (al primer clic, con voz elegida en Preferencias) y versión mejorada difuminada mientras se graba un intento nuevo
 - [x] Set de evaluación a 50 frases (40 de desarrollo y 10 de prueba), ejecutado en CI con 2 corridas cuando cambian prompts o modelos
-- [ ] Recall ≥ 90% en el set de prueba. Con el prompt v2, el set de desarrollo cumple la meta (0 FP, muletillas 90%, errores 100%, comparación sin fallos). El de prueba, medido una vez sin ajustar, tiene 0 FP, muletillas 89% y errores 75%. Lo que falla: el LLM cita la gramática desde el texto léxico y la validación la descarta, más dos reinicios que no son repeticiones exactas
-- [ ] Puerta: Marco repite una práctica desde el celular con pronunciación, escucha la versión mejorada y prueba el difuminado
+- [x] Recall en el set de prueba: con el prompt v2, el set de desarrollo cumple la meta (0 FP, muletillas 90%, errores 100%, comparación sin fallos). El de prueba, medido sin ajustar, tiene 0 FP, muletillas 89–91% y errores 75%. Lo que falla: el LLM cita la gramática desde el texto léxico y la validación la descarta, más dos reinicios que no son repeticiones exactas. Marco aceptó ese 75% al cerrar la fase (13-nov-2026) y desde entonces el recall del set de prueba es informativo en CI (los falsos positivos siguen rompiendo el build); las opciones para subirlo son probar `gpt-4.1` o ampliar el set de prueba con grabaciones nuevas
+- [x] Puerta: Marco repite una práctica desde el celular con pronunciación, escucha la versión mejorada con las dos voces y prueba el difuminado (13-nov-2026). En Azure, un audio de 117 s con pronunciación tarda 157 s; uno de 113 s sin pronunciación, 127 s; el TTS, ~3 s
 
 ### Fase 3 · Pulido para portafolio
 

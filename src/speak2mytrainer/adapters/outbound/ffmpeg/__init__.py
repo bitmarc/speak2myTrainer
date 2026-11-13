@@ -49,6 +49,19 @@ class FfmpegAudioConverter:
         except ValueError as exc:
             raise UnsupportedAudioError("El archivo no parece contener audio.") from exc
 
+    def to_m4a(self, data: bytes, suffix: str) -> bytes:
+        # 48 kbps mono basta para voz (~0.35 MB/min frente a ~2 MB/min del WAV). `faststart`
+        # pone el índice al principio para que Safari empiece a reproducir sin bajar todo.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / f"input{suffix}"
+            dst = Path(tmp) / "output.m4a"
+            src.write_bytes(data)
+            self._run(
+                [_tool("ffmpeg"), "-y", "-loglevel", "error", "-i", str(src), "-vn",
+                 "-ac", "1", "-c:a", "aac", "-b:a", "48k", "-movflags", "+faststart", str(dst)]
+            )  # fmt: skip
+            return dst.read_bytes()
+
     def to_wav16k(self, data: bytes, suffix: str, dst: Path) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / f"input{suffix}"

@@ -98,6 +98,9 @@ class FakeAudioConverter:
     def to_wav16k(self, data: bytes, suffix: str, dst: Path) -> None:
         dst.write_bytes(data)
 
+    def to_m4a(self, data: bytes, suffix: str) -> bytes:
+        return b"m4a:" + data
+
 
 def demo_analysis() -> TextAnalysis:
     """Un análisis con todos los bloques, para ver la interfaz en local sin Azure."""
@@ -181,6 +184,9 @@ class LocalFolderAudioStorage:
 
     def signed_url(self, path: str, ttl: timedelta) -> str:
         return self._resolve(path).resolve().as_uri()
+
+    def delete(self, path: str) -> None:
+        self._resolve(path).unlink(missing_ok=True)
 
     def delete_prefix(self, prefix: str) -> None:
         if not self.root.exists():

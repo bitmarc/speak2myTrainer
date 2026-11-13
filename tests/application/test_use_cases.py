@@ -233,10 +233,12 @@ def test_pronunciation_is_a_second_speech_pass(world: World) -> None:
 
     assert attempt is not None and attempt.pronunciation is not None
     assert world.recognizer.calls == [False, True]
+    # El último guardado es la ruta del audio comprimido, ya en `done`.
     assert statuses == [
         AttemptStatus.TRANSCRIBING,
         AttemptStatus.ASSESSING,
         AttemptStatus.ANALYZING,
+        AttemptStatus.DONE,
         AttemptStatus.DONE,
     ]
     # El "on" repetido no existe en el texto de registro: se descarta.
@@ -427,15 +429,55 @@ def test_process_traces_each_step_without_personal_data(tmp_path: Path) -> None:
     assert attempt is not None
 
     names = [name for name, _ in telemetry.spans]
-    assert names == ["process_attempt", "convert", "transcribe", "assess_pronunciation", "analyze"]
+    assert names == [
+        "process_attempt",
+        "convert",
+        "transcribe",
+        "assess_pronunciation",
+        "analyze",
+        "compress_audio",
+    ]
     root = telemetry.spans[0][1]
     assert root["attempt.id"] == attempt.id
     assert root["attempt.status"] == "done"
     assert root["cost.usd"] == attempt.cost_estimate_usd
-    assert telemetry.spans[-1][1]["llm.input_tokens"] == 5_000
+    assert telemetry.spans[4][1]["llm.input_tokens"] == 5_000
     # Ningún atributo lleva el correo ni el texto del usuario.
     values = [str(v) for _, attrs in telemetry.spans for v in attrs.values()]
     assert not any(USER in v or "worked on" in v for v in values)
+
+
+def test_audio_is_compressed_after_the_analysis(world: World, tmp_path: Path) -> None:
+    job = _submitted(world)
+    attempt = world.process(job, final=False)
+    assert attempt is not None
+    assert attempt.audio_blob == f"audio/{USER}/{job.practice_id}/{job.attempt_id}.m4a"
+    saved = world.practices.get_attempt(USER, job.attempt_id)
+    assert saved is not None
+    assert saved.audio_blob == attempt.audio_blob
+    assert world.audio.read(saved.audio_blob) == b"m4a:audio"
+    assert not list(tmp_path.rglob("*.wav"))  # el original se borró
+
+
+def test_m4a_uploads_are_not_compressed_again(world: World) -> None:
+    practice = practices.create_practice(world.practices, USER, "Entrevista", None)
+    world.submit(USER, practice.id, b"aac", "nota.m4a")
+    attempt = world.process(world.queue.jobs.popleft(), final=False)
+    assert attempt is not None
+    assert world.audio.read(attempt.audio_blob) == b"aac"
+
+
+def test_compression_failure_keeps_the_original(world: World) -> None:
+    def broken(data: bytes, suffix: str) -> bytes:
+        raise RuntimeError("ffmpeg murió")
+
+    world.converter.to_m4a = broken  # type: ignore[method-assign]
+    job = _submitted(world)
+    attempt = world.process(job, final=False)
+    assert attempt is not None
+    assert attempt.status is AttemptStatus.DONE
+    assert attempt.audio_blob.endswith(".wav")
+    assert world.audio.read(attempt.audio_blob) == b"audio"
 
 
 def test_improved_audio_adds_the_tts_cost(world: World) -> None:

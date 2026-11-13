@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import logging
 from datetime import timedelta
+from pathlib import PurePath
 
 import streamlit as st
 
@@ -19,6 +20,7 @@ from speak2mytrainer.adapters.inbound.streamlit_app.format import (
     highlight,
 )
 from speak2mytrainer.application.use_cases.practices import improved_audio, tts_path
+from speak2mytrainer.application.use_cases.submit_attempt import CONTENT_TYPES
 from speak2mytrainer.domain.errors import DomainError
 from speak2mytrainer.domain.metrics import INTERVIEW_WPM_RANGE
 from speak2mytrainer.domain.models import (
@@ -99,7 +101,9 @@ def _audio(ctx: WebContext, attempt: Attempt) -> None:
     _play(ctx, attempt.audio_blob)
 
 
-def _play(ctx: WebContext, path: str, mime: str = "audio/wav") -> None:
+def _play(ctx: WebContext, path: str) -> None:
+    # El original puede ser WAV, m4a u otro formato; tras el análisis queda en m4a.
+    mime = CONTENT_TYPES.get(PurePath(path).suffix.lower(), "audio/wav")
     url = ctx.container.audio.signed_url(path, timedelta(minutes=15))
     # En local la "URL" es file://, que el navegador no puede abrir: se envían los bytes.
     if url.startswith("file:"):
@@ -129,7 +133,7 @@ def _listen(ctx: WebContext, attempt: Attempt) -> None:
     if user is None:
         return
     if attempt.tts_blob == tts_path(user, attempt):
-        _play(ctx, attempt.tts_blob, "audio/mpeg")
+        _play(ctx, attempt.tts_blob)
         return
     if not st.button("Escuchar", icon=":material/volume_up:", key=f"tts-{attempt.id}"):
         return
@@ -150,7 +154,7 @@ def _listen(ctx: WebContext, attempt: Attempt) -> None:
             _log.exception("No se pudo generar el TTS del intento %s", attempt.id)
             st.error("No se pudo generar el audio. Intenta más tarde.")
             return
-    _play(ctx, path, "audio/mpeg")
+    _play(ctx, path)
 
 
 def _delta(current: float | None, before: Metrics | None, field: str, digits: int) -> str | None:

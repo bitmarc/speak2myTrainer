@@ -69,6 +69,17 @@ def test_ffmpeg_duration_and_conversion(sample_wav: Path) -> None:
         assert (w.getframerate(), w.getnchannels()) == (16000, 1)
 
 
+def test_ffmpeg_compresses_to_aac(sample_wav: Path) -> None:
+    from speak2mytrainer.adapters.outbound.ffmpeg import FfmpegAudioConverter
+
+    converter = FfmpegAudioConverter()
+    wav = sample_wav.read_bytes()
+    m4a = converter.to_m4a(wav, ".wav")
+    assert len(m4a) < len(wav) / 4
+    assert m4a[4:8] == b"ftyp"  # contenedor MP4
+    assert converter.duration_sec(m4a, ".m4a") == pytest.approx(25, abs=0.5)
+
+
 def test_transcriber(azure: AzureSettings, credential, sample_wav: Path) -> None:  # type: ignore[no-untyped-def]
     from azure.identity import get_bearer_token_provider
 
@@ -218,6 +229,9 @@ def test_blob_storage_with_user_delegation_sas(  # type: ignore[no-untyped-def]
         url = storage.signed_url(path, timedelta(minutes=5))
         with urllib.request.urlopen(url, timeout=30) as response:
             assert response.read() == b"RIFF-test"
+        storage.delete(path)
+        with pytest.raises(Exception):  # noqa: B017
+            storage.read(path)
     finally:
         storage.delete_prefix(f"audio/{user_id}/")
     with pytest.raises(Exception):  # noqa: B017

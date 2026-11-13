@@ -98,6 +98,10 @@ class AudioConverter(Protocol):
 
     def to_wav16k(self, data: bytes, suffix: str, dst: Path) -> None: ...
 
+    def to_m4a(self, data: bytes, suffix: str) -> bytes:
+        """AAC mono comprimido para guardar el audio después del análisis."""
+        ...
+
 
 class TextAnalyzer(Protocol):
     """Transcripción, contexto e intento previo a análisis estructurado."""
@@ -123,6 +127,8 @@ class AudioStorage(Protocol):
     def read(self, path: str) -> bytes: ...
 
     def signed_url(self, path: str, ttl: timedelta) -> str: ...
+
+    def delete(self, path: str) -> None: ...
 
     def delete_prefix(self, prefix: str) -> None: ...
 

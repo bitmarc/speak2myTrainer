@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -32,6 +33,10 @@ from speak2mytrainer.domain.models import (
     can_transition,
 )
 from speak2mytrainer.domain.pronunciation import grounded_issues
+
+COMPRESSED_SUFFIX = ".m4a"
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -198,6 +203,33 @@ class ProcessAttempt:
             self.prices,
         )
         self._save(attempt, AttemptStatus.DONE)
+        self._compress(attempt, data)
+
+    def _compress(self, attempt: Attempt, data: bytes) -> None:
+        """Reemplaza el audio original por AAC (~6 veces menos que el WAV del navegador).
+
+        Es de mejor esfuerzo: el análisis ya terminó, así que si falla se conserva el original.
+        Se guarda primero el nuevo y se borra el viejo al final, para no perder nada.
+        """
+        original = attempt.audio_blob
+        source = PurePath(original)
+        if source.suffix.lower() == COMPRESSED_SUFFIX:
+            return  # las notas de voz del iPhone ya vienen en AAC
+        target = source.with_suffix(COMPRESSED_SUFFIX).as_posix()
+        saved = False
+        try:
+            with self.telemetry.span("compress_audio", **{"audio.original_bytes": len(data)}):
+                compressed = self.converter.to_m4a(data, source.suffix)
+                self.audio.save(target, compressed, "audio/mp4")
+                attempt.audio_blob = target
+                self.practices.update_attempt(attempt)
+                saved = True
+                self.audio.delete(original)
+                self.telemetry.annotate(**{"audio.compressed_bytes": len(compressed)})
+        except Exception:
+            if not saved:
+                attempt.audio_blob = original
+            _log.warning("No se pudo comprimir el audio del intento %s", attempt.id, exc_info=True)
 
     def _previous(self, attempt: Attempt) -> Attempt | None:
         """El último intento analizado de la misma práctica antes de este (RF-15)."""

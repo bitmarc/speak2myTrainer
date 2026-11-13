@@ -69,6 +69,10 @@ class BlobAudioStorage:
         )
         return f"{self._service.get_blob_client(container, name).url}?{sas}"
 
+    def delete(self, path: str) -> None:
+        container, name = _split(path)
+        self._service.get_blob_client(container, name).delete_blob()
+
     def delete_prefix(self, prefix: str) -> None:
         container, name_prefix = _split(prefix)
         client = self._service.get_container_client(container)

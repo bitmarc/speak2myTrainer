@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from speak2mytrainer.application.ports import (
@@ -245,6 +245,13 @@ class InMemoryPracticeRepository:
     def delete_all(self, user_id: str) -> None:
         self.practices = {k: p for k, p in self.practices.items() if p.user_id != user_id}
         self.attempts = {k: a for k, a in self.attempts.items() if a.user_id != user_id}
+
+    def monthly_costs(self, since: datetime) -> dict[str, float]:
+        costs: dict[str, float] = {}
+        for a in self.attempts.values():
+            if a.created_at >= since and a.cost_estimate_usd:
+                costs[a.user_id] = costs.get(a.user_id, 0.0) + a.cost_estimate_usd
+        return costs
 
 
 class InMemoryUserDirectory:

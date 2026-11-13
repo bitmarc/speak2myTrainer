@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from speak2mytrainer.application.ports import UserDirectory
+from datetime import datetime
+
+from speak2mytrainer.application.ports import PracticeRepository, UserDirectory
 from speak2mytrainer.domain.errors import NotAllowedError, NotFoundError
 from speak2mytrainer.domain.models import Quota, Role, UserProfile, VoiceGender
 
@@ -100,3 +102,12 @@ def set_quota(
     user.quota.minutes_per_month = minutes_per_month
     users.save(user)
     return user.quota
+
+
+def monthly_spend(
+    practices: PracticeRepository, actor: UserProfile, now: datetime
+) -> dict[str, float]:
+    """Costo estimado del mes calendario (UTC) por usuario, para el panel de admin."""
+    _require_admin(actor)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return {user: round(usd, 4) for user, usd in practices.monthly_costs(month_start).items()}

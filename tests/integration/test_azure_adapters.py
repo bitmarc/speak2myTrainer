@@ -211,6 +211,14 @@ def test_cosmos_repository_and_directory(cosmos, user_id: str) -> None:  # type:
     assert [p.id for p in repo.list_practices(user_id)] == [practice.id]
     assert repo.list_attempts(user_id, practice.id) == [attempt]
 
+    # Gasto del mes: consulta entre particiones con fechas ISO comparadas como texto.
+    month_start = attempt.created_at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    assert user_id not in repo.monthly_costs(month_start)  # aún sin costo
+    attempt.cost_estimate_usd = 0.0125
+    repo.update_attempt(attempt)
+    assert repo.monthly_costs(month_start)[user_id] == pytest.approx(0.0125)
+    assert user_id not in repo.monthly_costs(attempt.created_at + timedelta(seconds=1))
+
     repo.delete_practice(user_id, practice.id)
     assert repo.get_attempt(user_id, attempt.id) is None
     assert repo.list_practices(user_id) == []

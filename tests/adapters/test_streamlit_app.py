@@ -209,3 +209,39 @@ def test_metric_delta_against_previous_attempt() -> None:
     assert _delta(2, before, "restarts", 0) is None  # sin cambio, sin delta
     assert _delta(80.0, before, "pron_score", 0) is None  # el anterior no evaluó pronunciación
     assert _delta(130.0, None, "wpm", 0) is None
+
+
+def _render_admin() -> None:
+    from pathlib import Path as _Path
+    from tempfile import mkdtemp
+
+    from speak2mytrainer.adapters.inbound.streamlit_app import WebContext, pages
+    from speak2mytrainer.bootstrap import Environment, Settings, build_container
+    from speak2mytrainer.domain.models import Attempt, Role, UserProfile
+
+    container = build_container(Settings(env=Environment.CI, local_data_dir=_Path(mkdtemp())))
+    admin = UserProfile(id="admin@x.com", name="Admin", role=Role.ADMIN)
+    container.users.save(admin)
+    container.users.save(UserProfile(id="ana@x.com", name="Ana"))
+    for i, (user, usd) in enumerate(
+        [("ana@x.com", 0.5), ("ana@x.com", 0.25), ("admin@x.com", 1.0)]
+    ):
+        container.practices.add_attempt(
+            Attempt(
+                id=f"a{i}", user_id=user, practice_id="p", number=i + 1, audio_blob="x.m4a",
+                duration_sec=60, cost_estimate_usd=usd,
+            )
+        )  # fmt: skip
+    pages.admin(WebContext(container, dev_user=admin.id), admin)
+
+
+def test_admin_page_shows_the_monthly_spend() -> None:
+    at = AppTest.from_function(_render_admin, default_timeout=30).run()
+    assert not at.exception
+    assert at.metric[0].label == "Gasto estimado del mes"
+    assert at.metric[0].value == "1.75 USD"
+    table = at.dataframe[0].value
+    assert dict(zip(table["Correo"], table["Gasto (USD)"], strict=True)) == {
+        "admin@x.com": 1.0,
+        "ana@x.com": 0.75,
+    }

@@ -113,6 +113,32 @@ def test_admin_manages_whitelist_and_quota() -> None:
         access.revoke_user(users, admin, ADMIN)
 
 
+def test_monthly_spend_sums_this_month_per_user(world: World) -> None:
+    from datetime import UTC, datetime
+
+    from speak2mytrainer.domain.models import Attempt
+
+    def add(attempt_id: str, user: str, usd: float | None, created: datetime) -> None:
+        world.practices.add_attempt(
+            Attempt(
+                id=attempt_id, user_id=user, practice_id="p", number=1, audio_blob="x",
+                duration_sec=60, cost_estimate_usd=usd, created_at=created,
+            )
+        )  # fmt: skip
+
+    add("a", USER, 0.5, datetime(2026, 11, 2, tzinfo=UTC))
+    add("b", USER, 0.25, datetime(2026, 11, 13, tzinfo=UTC))
+    add("c", USER, 9.0, datetime(2026, 10, 31, 23, tzinfo=UTC))  # mes anterior
+    add("d", ADMIN, None, datetime(2026, 11, 5, tzinfo=UTC))  # aún sin procesar
+    admin = UserProfile(id=ADMIN, name="Marco", role=Role.ADMIN)
+    now = datetime(2026, 11, 13, 12, tzinfo=UTC)
+
+    assert access.monthly_spend(world.practices, admin, now) == {USER: 0.75}
+    user = UserProfile(id=USER, name="Ana")
+    with pytest.raises(NotAllowedError):
+        access.monthly_spend(world.practices, user, now)
+
+
 def test_regular_user_cannot_administer() -> None:
     users = fakes.InMemoryUserDirectory([UserProfile(id=USER, name="Ana")])
     user = access.resolve_user(users, USER, None, ADMIN)

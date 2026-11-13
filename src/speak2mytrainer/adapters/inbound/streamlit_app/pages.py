@@ -13,6 +13,7 @@ from speak2mytrainer.domain.errors import DomainError
 from speak2mytrainer.domain.models import Role, UserProfile, utcnow
 
 CONFIRM_WORD = "BORRAR"
+MONTHLY_BUDGET_USD = 15.0  # el presupuesto de Azure del PRD, con alertas al 50, 80 y 100%
 
 
 def practices(ctx: WebContext, user: UserProfile, nav: Nav) -> None:
@@ -101,6 +102,18 @@ def admin(ctx: WebContext, user: UserProfile) -> None:
     st.title("Administración")
     users = ctx.container.users
 
+    spend = access.monthly_spend(ctx.container.practices, user, utcnow())
+    total = sum(spend.values())
+    st.metric(
+        "Gasto estimado del mes",
+        f"{total:.2f} USD",
+        help=f"Presupuesto de Azure: {MONTHLY_BUDGET_USD:.0f} USD al mes.",
+    )
+    st.caption(
+        "Estimado por la app con el uso de cada intento; el F0 de Speech cuenta como 0. "
+        "El gasto real está en Cost Management del portal de Azure."
+    )
+
     st.subheader("Usuarios")
     rows = [
         {
@@ -109,6 +122,7 @@ def admin(ctx: WebContext, user: UserProfile) -> None:
             "Acceso": "sí" if u.allowed else "no",
             "Cuota (min)": u.quota.minutes_per_month,
             "Usado (min)": round(u.quota.used_this_month, 1),
+            "Gasto (USD)": round(spend.get(u.id, 0.0), 2),
         }
         for u in access.list_users(users, user)
     ]

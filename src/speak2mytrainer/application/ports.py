@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -153,6 +153,10 @@ class PracticeRepository(Protocol):
     def update_attempt(self, attempt: Attempt) -> None: ...
 
     def delete_all(self, user_id: str) -> None: ...
+
+    def monthly_costs(self, since: datetime) -> dict[str, float]:
+        """Suma de `cost_estimate_usd` por usuario de los intentos creados desde `since`."""
+        ...
 
 
 class UserDirectory(Protocol):

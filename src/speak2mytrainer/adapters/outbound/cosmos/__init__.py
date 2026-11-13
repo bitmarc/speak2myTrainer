@@ -7,6 +7,7 @@ renombrado a `userId` (la clave de partición) y sin los metadatos de Cosmos.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from azure.core.credentials import TokenCredential
@@ -108,6 +109,20 @@ class CosmosPracticeRepository:
     def delete_all(self, user_id: str) -> None:
         _delete_where(self._attempts, user_id, "")
         _delete_where(self._practices, user_id, "")
+
+    def monthly_costs(self, since: datetime) -> dict[str, float]:
+        # Entre particiones a propósito: es la vista del admin y el volumen es bajo. Las fechas
+        # se guardan en ISO 8601 UTC, así que comparar texto ordena igual que comparar fechas.
+        docs = self._attempts.query_items(
+            f"SELECT c.{_PK}, c.cost_estimate_usd FROM c "
+            "WHERE c.created_at >= @since AND IS_NUMBER(c.cost_estimate_usd)",
+            parameters=[{"name": "@since", "value": since.strftime("%Y-%m-%dT%H:%M:%S")}],
+            enable_cross_partition_query=True,
+        )
+        costs: dict[str, float] = {}
+        for doc in docs:
+            costs[doc[_PK]] = costs.get(doc[_PK], 0.0) + doc["cost_estimate_usd"]
+        return costs
 
 
 class CosmosUserDirectory:

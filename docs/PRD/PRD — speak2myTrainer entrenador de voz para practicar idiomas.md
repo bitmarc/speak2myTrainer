@@ -310,12 +310,13 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 
 ### Fase 3 · Pulido para portafolio
 
-- [ ] Application Insights con trazas por intento (tiempos y costo estimado)
+- [x] Application Insights con trazas por intento (tiempos y costo estimado), sin llaves y sin datos personales (ADR 0005). En Azure, un audio de 45 s con pronunciación tarda 44 s en el job (transcribir 20 s, evaluar 20 s, LLM 2–3 s, comprimir 1 s) y cuesta ~0.004 USD con Speech en F0
 - [x] Compresión a AAC (`.m4a`, 48 kbps mono) tras el análisis, en lugar de Opus, para que suene en cualquier Safari: un WAV de 45 s pasa de 1.4 MB a 0.29 MB. La regla de ciclo de vida a Cool ya existía desde la Fase 1
 - [x] Borrar práctica y todo el historial (hecho en la Fase 1)
 - [x] Panel de admin: gasto estimado del mes por usuario, que suma el `costEstimateUsd` de cada intento (lista blanca y cuotas, hechas en la Fase 1)
 - [x] README con diagrama, pipeline, decisiones de arquitectura (ADR 0001–0005) y costos
 - [ ] Video demo y capturas en el README
+- [ ] Puerta: Marco hace una práctica y verifica el gasto del mes en Admin, la traza del intento en Application Insights y que el audio del historial (ya en `.m4a`) suene en el celular
 
 ### Fase 4 · Expansión (opcional)
 

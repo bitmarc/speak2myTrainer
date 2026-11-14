@@ -6,6 +6,7 @@ su proveedor vacío y los tramos no cuestan nada, así que el adaptador funciona
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -28,12 +29,18 @@ def configure(
     from azure.monitor.opentelemetry import configure_azure_monitor
     from opentelemetry.sdk.resources import Resource
 
+    # El distro ignora `disable_tracing` y `disable_metrics` como argumentos: los lee de las
+    # variables estándar de OpenTelemetry. Su muestreo por defecto (5 trazas/s, adaptativo)
+    # descartó la traza del primer intento en Azure; con un intento cada tanto, se guardan todas.
+    os.environ["OTEL_METRICS_EXPORTER"] = "none"  # las métricas estándar gastan ingesta
+    os.environ["OTEL_TRACES_EXPORTER"] = "azure_monitor" if tracing else "none"
+    os.environ["OTEL_TRACES_SAMPLER"] = "always_on"
     configure_azure_monitor(
         connection_string=connection_string,
         credential=credential,
         resource=Resource.create({"service.name": service}),
-        disable_tracing=not tracing,
-        disable_metrics=True,  # las métricas estándar no se usan y gastan ingesta
+        enable_live_metrics=False,
+        enable_performance_counters=False,
     )
 
 

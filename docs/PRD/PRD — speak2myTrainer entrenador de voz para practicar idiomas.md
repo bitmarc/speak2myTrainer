@@ -258,7 +258,7 @@ Con uso esperado (unos 10 usuarios y 10 horas de audio al mes) el costo ronda 8 
 | Transcripción `gpt-4o-mini-transcribe` | \~0.90 USD | \~1.80 USD | \~0.003 USD/min |
 | LLM `gpt-4.1-mini` | \~0.40 USD | \~0.75 USD | \~5k tokens de entrada y \~2.5k de salida por análisis (\~0.006 USD) |
 | Azure TTS, Container Apps, Cosmos DB, logs | 0 USD | 0 USD | Dentro de cuotas gratuitas: 0.5 M caracteres, 180 mil vCPU-s, 1,000 RU/s, 5 GB |
-| Blob Storage | \~0.10 USD | \~0.30 USD | Audio comprimido a Opus/M4A tras el análisis |
+| Blob Storage | \~0.10 USD | \~0.30 USD | Audio comprimido a AAC (`.m4a`) tras el análisis |
 | **Total** | **\~1.5 USD** | **\~8 USD** | Margen de \~7 USD para crecer o probar modelos |
 
 Controles de gasto:
@@ -311,10 +311,11 @@ Cada puerta es un criterio verificable; si no se cumple, se corrige antes de ava
 ### Fase 3 · Pulido para portafolio
 
 - [ ] Application Insights con trazas por intento (tiempos y costo estimado)
-- [ ] Compresión a Opus tras el análisis y regla de ciclo de vida a Cool
+- [x] Compresión a AAC (`.m4a`, 48 kbps mono) tras el análisis, en lugar de Opus, para que suene en cualquier Safari: un WAV de 45 s pasa de 1.4 MB a 0.29 MB. La regla de ciclo de vida a Cool ya existía desde la Fase 1
 - [x] Borrar práctica y todo el historial (hecho en la Fase 1)
-- [ ] Panel de admin: gasto del mes (lista blanca y cuotas, hechos en la Fase 1)
-- [ ] README con diagrama, decisiones de arquitectura (ADR) y video demo
+- [x] Panel de admin: gasto estimado del mes por usuario, que suma el `costEstimateUsd` de cada intento (lista blanca y cuotas, hechas en la Fase 1)
+- [x] README con diagrama, pipeline, decisiones de arquitectura (ADR 0001–0005) y costos
+- [ ] Video demo y capturas en el README
 
 ### Fase 4 · Expansión (opcional)
 

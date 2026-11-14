@@ -17,6 +17,13 @@ from speak2mytrainer.application.ports import Attribute
 
 _TRACER_NAME = "speak2mytrainer"
 
+# Las dependencias automáticas de Cosmos y Blob llevan en el nombre y la URL el id del
+# documento o la ruta del blob, que incluyen el correo del usuario: se apagan. Los tramos
+# propios ya miden cada paso. Se deja httpx, que solo ve la llamada a Azure OpenAI.
+_INSTRUMENTATION = {
+    name: {"enabled": False} for name in ("azure_sdk", "requests", "urllib", "urllib3")
+}
+
 
 def configure(
     connection_string: str, credential: TokenCredential, service: str, *, tracing: bool
@@ -41,6 +48,7 @@ def configure(
         resource=Resource.create({"service.name": service}),
         enable_live_metrics=False,
         enable_performance_counters=False,
+        instrumentation_options=_INSTRUMENTATION,
     )
 
 
